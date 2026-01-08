@@ -526,21 +526,45 @@ class ReplicateService:
 
     def _process_output(self, output: Any) -> Dict[str, Any]:
         """Process and normalize model output."""
+        logger.info(f"[REPLICATE] Raw output type: {type(output)}")
+        logger.info(f"[REPLICATE] Raw output: {output}")
+
+        # If it's a generator, consume it first
+        if hasattr(output, '__next__'):
+            logger.info("[REPLICATE] Output is a generator, consuming...")
+            output = list(output)
+            logger.info(f"[REPLICATE] Generator consumed: {output}")
+
         if isinstance(output, str):
+            logger.info(f"[REPLICATE] Returning single URL string: {output}")
             return {"url": output, "type": "single"}
         elif isinstance(output, list):
+            if len(output) == 0:
+                logger.warning("[REPLICATE] Output list is empty!")
+                return {"url": None, "type": "empty"}
             if len(output) == 1:
-                return {"url": output[0], "type": "single"}
-            return {"urls": output, "type": "multiple"}
+                url = str(output[0])
+                logger.info(f"[REPLICATE] Returning single URL from list: {url}")
+                return {"url": url, "type": "single"}
+            logger.info(f"[REPLICATE] Returning multiple URLs: {output}")
+            return {"urls": [str(u) for u in output], "type": "multiple"}
         elif hasattr(output, 'url'):
-            return {"url": str(output.url), "type": "single"}
+            url = str(output.url)
+            logger.info(f"[REPLICATE] Returning URL from object: {url}")
+            return {"url": url, "type": "single"}
         elif hasattr(output, '__iter__'):
             urls = [str(item) for item in output]
+            logger.info(f"[REPLICATE] Iterable converted to list: {urls}")
+            if len(urls) == 0:
+                logger.warning("[REPLICATE] Iterable was empty!")
+                return {"url": None, "type": "empty"}
             if len(urls) == 1:
                 return {"url": urls[0], "type": "single"}
             return {"urls": urls, "type": "multiple"}
         else:
-            return {"result": str(output), "type": "unknown"}
+            result = str(output)
+            logger.info(f"[REPLICATE] Unknown output type, stringified: {result}")
+            return {"result": result, "type": "unknown"}
 
     def get_estimated_time(self, tool_id: str) -> int:
         """Get estimated processing time in seconds."""
