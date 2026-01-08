@@ -216,6 +216,7 @@ class ReplicateService:
             case "colorize":
                 # arielreplicate/deoldify_image (verified hash)
                 inputs["input_image"] = image_url
+                inputs["model_name"] = "Artistic"  # Required: "Artistic" or "Stable"
                 inputs["render_factor"] = 35
 
             case "4k_upscale":
@@ -305,8 +306,14 @@ class ReplicateService:
         match tool_id:
             case "magic_eraser":
                 # allenhooo/lama (verified hash)
+                # NOTE: This model REQUIRES a mask image
                 inputs["image"] = image_url
-                inputs["mask"] = mask_url
+                if mask_url:
+                    inputs["mask"] = mask_url
+                else:
+                    # If no mask provided, we need to return an error
+                    # The Flutter app should provide a mask drawing interface
+                    raise ValueError("Magic Eraser requires a mask. Please draw on the area you want to remove.")
 
             case "ai_headshot":
                 # tencentarc/photomaker (verified hash)
