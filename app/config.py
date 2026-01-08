@@ -207,7 +207,7 @@ AI_MODELS = {
     },
     "4k_upscale": {
         "model": "nightmareai/real-esrgan",
-        "version": "42fed1c492902594f7157a9128f73117281f6920d3f2c5108169990263f6955b",
+        "version": None,  # Use latest version
         "category": "photo_enhance",
         "description": "Enhance images to 4K resolution",
         "cost_per_run": 0.002,
@@ -247,13 +247,13 @@ AI_MODELS = {
         "supports": ["image"],
     },
     "anime_yourself": {
-        "model": "black-forest-labs/flux-schnell",
-        "version": None,
+        "model": "fofr/face-to-sticker",
+        "version": "764d4827ea159608a07cdde8ddf1c6000019627571f37b111c96b3b29571571f",
         "category": "photo_enhance",
         "description": "Transform into anime style",
-        "cost_per_run": 0.003,
-        "supports": ["prompt"],
-        "default_prompt": "Anime style illustration of a person, high quality anime art, detailed, studio ghibli style, vibrant colors",
+        "cost_per_run": 0.008,
+        "supports": ["image", "prompt"],
+        "default_prompt": "anime style portrait, high quality anime art, detailed, studio ghibli style, vibrant colors",
     },
     "portrait_mode": {
         "model": "lucataco/remove-bg",
@@ -266,7 +266,7 @@ AI_MODELS = {
     },
     "color_correct": {
         "model": "google-research/maxim",
-        "version": "494ca4d578293b4b93945115601b6a38190519da5654194dc8bb3ea723424a12",
+        "version": None,  # Use latest version
         "category": "photo_enhance",
         "description": "Professional color grading",
         "cost_per_run": 0.005,

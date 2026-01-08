@@ -79,6 +79,7 @@ async def generate(
     input_params = {
         "image_url": request.image_url,  # Can be URL or data:image/...;base64,...
         "image_url_2": request.image_url_2,
+        "mask_url": request.mask_url,  # Mask for inpainting tools
         "prompt": request.prompt,
         "negative_prompt": request.negative_prompt,
         "style": request.style,
@@ -136,9 +137,18 @@ async def get_job_status(job_id: str):
 
     result_url = None
     if job["result"] and isinstance(job["result"], dict):
-        result_url = job["result"].get("url") or (
-            job["result"].get("urls", [None])[0] if job["result"].get("urls") else None
-        )
+        # Try to get single url first
+        result_url = job["result"].get("url")
+        # If not found, try urls list
+        if not result_url:
+            urls = job["result"].get("urls")
+            if urls and isinstance(urls, list) and len(urls) > 0:
+                result_url = urls[0]
+        # If still not found, try result string
+        if not result_url:
+            result_str = job["result"].get("result")
+            if result_str and isinstance(result_str, str) and result_str.startswith("http"):
+                result_url = result_str
 
     return JobStatusResponse(
         job_id=job_id,

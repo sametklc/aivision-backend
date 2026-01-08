@@ -227,7 +227,8 @@ class ReplicateService:
 
             case "relight":
                 # zsxkib/ic-light (verified hash)
-                inputs["image"] = image_url
+                # NOTE: ic-light requires "subject_image" not "image"
+                inputs["subject_image"] = image_url
                 inputs["prompt"] = prompt or config.get("default_prompt", "professional studio lighting")
                 inputs["light_source"] = kwargs.get("light_source", "Left Light")
                 inputs["num_inference_steps"] = 25
@@ -246,12 +247,12 @@ class ReplicateService:
                 inputs["codeformer_fidelity"] = 0.7
 
             case "anime_yourself":
-                # black-forest-labs/flux-schnell
-                inputs["prompt"] = prompt or config.get("default_prompt")
-                inputs["num_inference_steps"] = 4
-                inputs["go_fast"] = True
-                inputs["output_format"] = "webp"
-                inputs["output_quality"] = 80
+                # fofr/face-to-sticker - converts face to anime/cartoon style
+                inputs["image"] = image_url
+                inputs["prompt"] = prompt or config.get("default_prompt", "anime style portrait")
+                inputs["negative_prompt"] = "realistic, photo, ugly, deformed"
+                inputs["steps"] = 20
+                inputs["upscale"] = False  # Save cost
 
             case "portrait_mode":
                 # lucataco/remove-bg (verified hash)
@@ -355,7 +356,8 @@ class ReplicateService:
 
             case "product_shoot":
                 # zsxkib/ic-light (same as relight, for product photography)
-                inputs["image"] = image_url
+                # NOTE: ic-light requires "subject_image" not "image"
+                inputs["subject_image"] = image_url
                 inputs["prompt"] = prompt or config.get("default_prompt")
                 inputs["light_source"] = "Top Light"
                 inputs["num_inference_steps"] = 25

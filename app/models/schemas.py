@@ -223,6 +223,7 @@ class GenericAIRequest(BaseRequest):
     # Accept both URLs and base64 data URIs
     image_url: Optional[str] = Field(None, description="Primary image URL or base64 data URI")
     image_url_2: Optional[str] = Field(None, description="Secondary image URL or base64 data URI")
+    mask_url: Optional[str] = Field(None, description="Mask image URL or base64 data URI for inpainting")
     prompt: Optional[str] = Field(None, description="Text prompt")
     negative_prompt: Optional[str] = Field(None, description="Negative prompt")
     style: Optional[str] = Field(None, description="Style selection")
@@ -250,8 +251,8 @@ class JobStatusResponse(BaseModel):
     job_id: str
     status: JobStatus
     progress: float = Field(0, ge=0, le=100, description="Progress percentage")
-    result_url: Optional[HttpUrl] = None
-    thumbnail_url: Optional[HttpUrl] = None
+    result_url: Optional[str] = None  # Can be URL or data URI
+    thumbnail_url: Optional[str] = None
     error: Optional[str] = None
     created_at: datetime
     completed_at: Optional[datetime] = None
