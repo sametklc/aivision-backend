@@ -248,7 +248,7 @@ AI_MODELS = {
     },
     "anime_yourself": {
         "model": "fofr/face-to-sticker",
-        "version": "764d4827ea159608a07cdde8ddf1c6000019627571f37b111c96b3b29571571f",
+        "version": None,  # Use latest version
         "category": "photo_enhance",
         "description": "Transform into anime style",
         "cost_per_run": 0.008,
