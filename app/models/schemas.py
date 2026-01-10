@@ -229,7 +229,8 @@ class GenericAIRequest(BaseRequest):
     style: Optional[str] = Field(None, description="Style selection")
     aspect_ratio: Optional[str] = Field(None, description="Aspect ratio")
     quality: Optional[str] = Field("high", description="Quality level")
-    duration: Optional[int] = Field(4, description="Duration for video tools")
+    duration: Optional[int] = Field(5, description="Duration for video tools (2-12 seconds)")
+    resolution: Optional[str] = Field("720p", description="Video resolution: 480p, 720p, 1080p")
 
     # Additional parameters as dict for tool-specific options
     params: Optional[dict] = Field(default_factory=dict, description="Tool-specific parameters")

@@ -105,12 +105,15 @@ AI_MODELS = {
         "supports": ["image", "prompt", "duration"],
     },
     "text_to_video": {
-        "model": "minimax/video-01",
+        "model": "bytedance/seedance-1-lite",
         "version": None,
         "category": "video",
         "description": "Generate videos from text prompts",
-        "cost_per_run": 0.50,
-        "supports": ["prompt"],
+        "cost_per_run": 0.25,
+        "supports": ["prompt", "duration", "resolution"],
+        "default_duration": 5,  # 2-12 seconds
+        "default_resolution": "720p",  # 480p, 720p, 1080p
+        "default_aspect_ratio": "16:9",
     },
     "talking_head": {
         "model": "lucataco/sadtalker",
@@ -247,13 +250,13 @@ AI_MODELS = {
         "supports": ["image"],
     },
     "anime_yourself": {
-        "model": "fofr/face-to-sticker",
-        "version": None,  # Use latest version
+        "model": "stability-ai/stable-diffusion-img2img",
+        "version": None,  # Use latest
         "category": "photo_enhance",
         "description": "Transform into anime style",
         "cost_per_run": 0.008,
         "supports": ["image", "prompt"],
-        "default_prompt": "anime style portrait, high quality anime art, detailed, studio ghibli style, vibrant colors",
+        "default_prompt": "anime style portrait, high quality anime art, detailed, studio ghibli style, vibrant colors, best quality, masterpiece",
     },
     "portrait_mode": {
         "model": "lucataco/remove-bg",
@@ -278,7 +281,7 @@ AI_MODELS = {
     # ══════════════════════════════════════════════════════════════════════════
     "magic_eraser": {
         "model": "allenhooo/lama",
-        "version": "cdac78a1bec5b23c07fd29692fb70baa513ea403a39e643c48ec5edadb15fe72",
+        # Using latest version - hardcoded hashes become outdated
         "category": "magic_edit",
         "description": "Remove unwanted objects",
         "cost_per_run": 0.003,

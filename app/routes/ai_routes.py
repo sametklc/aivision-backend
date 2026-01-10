@@ -86,6 +86,7 @@ async def generate(
         "aspect_ratio": request.aspect_ratio,
         "quality": request.quality,
         "duration": request.duration,
+        "resolution": request.resolution,  # 480p, 720p, 1080p for video
         **(request.params or {}),
     }
 

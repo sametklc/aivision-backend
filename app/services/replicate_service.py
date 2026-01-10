@@ -121,8 +121,21 @@ class ReplicateService:
                 inputs["resolution"] = "480p"
                 inputs["frames_per_second"] = 16
 
-            case "text_to_video" | "script_to_video":
-                # minimax/video-01
+            case "text_to_video":
+                # bytedance/seedance-1-lite
+                inputs["prompt"] = prompt or config.get("default_prompt", "cinematic video")
+                # Duration: 2-12 seconds
+                duration = kwargs.get("duration", config.get("default_duration", 5))
+                inputs["duration"] = max(2, min(12, int(duration)))
+                # Resolution: 480p, 720p, 1080p
+                resolution = kwargs.get("resolution", config.get("default_resolution", "720p"))
+                inputs["resolution"] = resolution if resolution in ["480p", "720p", "1080p"] else "720p"
+                # Aspect ratio
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("default_aspect_ratio", "16:9"))
+                inputs["fps"] = 24
+
+            case "script_to_video":
+                # minimax/video-01 for longer scripts
                 inputs["prompt"] = prompt or config.get("default_prompt", "cinematic video")
                 inputs["prompt_optimizer"] = False
 
@@ -247,12 +260,12 @@ class ReplicateService:
                 inputs["codeformer_fidelity"] = 0.7
 
             case "anime_yourself":
-                # fofr/face-to-sticker - converts face to anime/cartoon style
+                # stability-ai/stable-diffusion-img2img - converts photo to anime style
                 inputs["image"] = image_url
-                inputs["prompt"] = prompt or config.get("default_prompt", "anime style portrait")
-                inputs["negative_prompt"] = "realistic, photo, ugly, deformed"
-                inputs["steps"] = 20
-                inputs["upscale"] = False  # Save cost
+                inputs["prompt"] = prompt or config.get("default_prompt", "anime style portrait, high quality anime art, studio ghibli style")
+                inputs["negative_prompt"] = "realistic, photo, ugly, deformed, blurry, low quality"
+                inputs["prompt_strength"] = 0.7  # Balance between original and anime style
+                inputs["num_inference_steps"] = 25
 
             case "portrait_mode":
                 # lucataco/remove-bg (verified hash)
@@ -529,11 +542,32 @@ class ReplicateService:
         logger.info(f"[REPLICATE] Raw output type: {type(output)}")
         logger.info(f"[REPLICATE] Raw output: {output}")
 
+        # Helper to extract URL from FileOutput or similar objects
+        def extract_url(item: Any) -> str:
+            # FileOutput objects have a direct string representation that is the URL
+            if hasattr(item, '__str__'):
+                url = str(item)
+                # Verify it looks like a URL
+                if url.startswith('http'):
+                    return url
+            # Try .url attribute
+            if hasattr(item, 'url'):
+                return str(item.url)
+            # Last resort
+            return str(item)
+
         # If it's a generator, consume it first
         if hasattr(output, '__next__'):
             logger.info("[REPLICATE] Output is a generator, consuming...")
             output = list(output)
             logger.info(f"[REPLICATE] Generator consumed: {output}")
+
+        # Handle FileOutput directly (Replicate's file output wrapper)
+        type_name = type(output).__name__
+        if type_name == 'FileOutput' or 'FileOutput' in str(type(output)):
+            url = extract_url(output)
+            logger.info(f"[REPLICATE] FileOutput detected, extracted URL: {url}")
+            return {"url": url, "type": "single"}
 
         if isinstance(output, str):
             logger.info(f"[REPLICATE] Returning single URL string: {output}")
@@ -542,18 +576,20 @@ class ReplicateService:
             if len(output) == 0:
                 logger.warning("[REPLICATE] Output list is empty!")
                 return {"url": None, "type": "empty"}
-            if len(output) == 1:
-                url = str(output[0])
-                logger.info(f"[REPLICATE] Returning single URL from list: {url}")
-                return {"url": url, "type": "single"}
-            logger.info(f"[REPLICATE] Returning multiple URLs: {output}")
-            return {"urls": [str(u) for u in output], "type": "multiple"}
+            # Extract URLs from list items (may be FileOutput objects)
+            urls = [extract_url(item) for item in output]
+            if len(urls) == 1:
+                logger.info(f"[REPLICATE] Returning single URL from list: {urls[0]}")
+                return {"url": urls[0], "type": "single"}
+            logger.info(f"[REPLICATE] Returning multiple URLs: {urls}")
+            return {"urls": urls, "type": "multiple"}
         elif hasattr(output, 'url'):
             url = str(output.url)
             logger.info(f"[REPLICATE] Returning URL from object: {url}")
             return {"url": url, "type": "single"}
         elif hasattr(output, '__iter__'):
-            urls = [str(item) for item in output]
+            items = list(output)
+            urls = [extract_url(item) for item in items]
             logger.info(f"[REPLICATE] Iterable converted to list: {urls}")
             if len(urls) == 0:
                 logger.warning("[REPLICATE] Iterable was empty!")
@@ -562,9 +598,13 @@ class ReplicateService:
                 return {"url": urls[0], "type": "single"}
             return {"urls": urls, "type": "multiple"}
         else:
-            result = str(output)
-            logger.info(f"[REPLICATE] Unknown output type, stringified: {result}")
-            return {"result": result, "type": "unknown"}
+            # Try to extract URL anyway
+            url = extract_url(output)
+            if url.startswith('http'):
+                logger.info(f"[REPLICATE] Extracted URL from unknown type: {url}")
+                return {"url": url, "type": "single"}
+            logger.info(f"[REPLICATE] Unknown output type, stringified: {url}")
+            return {"result": url, "type": "unknown"}
 
     def get_estimated_time(self, tool_id: str) -> int:
         """Get estimated processing time in seconds."""
