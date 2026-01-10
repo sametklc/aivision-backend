@@ -281,7 +281,7 @@ AI_MODELS = {
     # ══════════════════════════════════════════════════════════════════════════
     "magic_eraser": {
         "model": "allenhooo/lama",
-        # Using latest version - hardcoded hashes become outdated
+        "version": "cdac78a1bec5b23c07fd29692fb70baa513ea403a39e643c48ec5edadb15fe72",
         "category": "magic_edit",
         "description": "Remove unwanted objects",
         "cost_per_run": 0.003,

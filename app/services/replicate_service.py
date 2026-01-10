@@ -495,17 +495,20 @@ class ReplicateService:
             # Build model identifier
             model_path = model_config["model"]
             version = model_config.get("version")
-            if version:
-                model_identifier = f"{model_path}:{version}"
-            else:
-                model_identifier = model_path
 
-            # Create prediction
-            prediction = await asyncio.to_thread(
-                self.client.predictions.create,
-                model=model_identifier,
-                input=safe_inputs
-            )
+            # Create prediction - use version if available, otherwise model
+            if version:
+                prediction = await asyncio.to_thread(
+                    self.client.predictions.create,
+                    version=version,
+                    input=safe_inputs
+                )
+            else:
+                prediction = await asyncio.to_thread(
+                    self.client.predictions.create,
+                    model=model_path,
+                    input=safe_inputs
+                )
 
             return True, prediction.id, None
 
