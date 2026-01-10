@@ -280,8 +280,8 @@ AI_MODELS = {
     # MAGIC EDIT (11 Tools)
     # ══════════════════════════════════════════════════════════════════════════
     "magic_eraser": {
-        "model": "allenhooo/lama",
-        "version": "cdac78a1bec5b23c07fd29692fb70baa513ea403a39e643c48ec5edadb15fe72",
+        "model": "bria/eraser",
+        "version": "893e924eecc119a0c5fbfa5d98401118dcbf0662574eb8d2c01be5749756cbd4",
         "category": "magic_edit",
         "description": "Remove unwanted objects",
         "cost_per_run": 0.003,

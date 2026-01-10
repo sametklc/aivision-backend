@@ -319,14 +319,12 @@ class ReplicateService:
 
         match tool_id:
             case "magic_eraser":
-                # allenhooo/lama (verified hash)
+                # bria/eraser - SOTA object removal
                 # NOTE: This model REQUIRES a mask image
                 inputs["image"] = image_url
                 if mask_url:
                     inputs["mask"] = mask_url
                 else:
-                    # If no mask provided, we need to return an error
-                    # The Flutter app should provide a mask drawing interface
                     raise ValueError("Magic Eraser requires a mask. Please draw on the area you want to remove.")
 
             case "ai_headshot":
