@@ -260,12 +260,11 @@ class ReplicateService:
                 inputs["codeformer_fidelity"] = 0.7
 
             case "anime_yourself":
-                # stability-ai/stable-diffusion-img2img - converts photo to anime style
+                # aaronaftab/mirage-ghibli - Ghibli-style anime transformation
                 inputs["image"] = image_url
-                inputs["prompt"] = prompt or config.get("default_prompt", "anime style portrait, high quality anime art, studio ghibli style")
-                inputs["negative_prompt"] = "realistic, photo, ugly, deformed, blurry, low quality"
-                inputs["prompt_strength"] = 0.7  # Balance between original and anime style
-                inputs["num_inference_steps"] = 25
+                inputs["prompt"] = prompt or config.get("default_prompt", "anime style portrait, ghibli style, beautiful detailed anime art")
+                inputs["prompt_strength"] = 0.78  # Recommended range: 0.76-0.8
+                inputs["go_fast"] = True
 
             case "portrait_mode":
                 # lucataco/remove-bg (verified hash)

@@ -250,13 +250,13 @@ AI_MODELS = {
         "supports": ["image"],
     },
     "anime_yourself": {
-        "model": "stability-ai/stable-diffusion-img2img",
-        "version": None,  # Use latest
+        "model": "aaronaftab/mirage-ghibli",
+        "version": "166efd159b4138da932522bc5af40d39194033f587d9bdbab1e594119eae3e7f",
         "category": "photo_enhance",
         "description": "Transform into anime style",
         "cost_per_run": 0.008,
         "supports": ["image", "prompt"],
-        "default_prompt": "anime style portrait, high quality anime art, detailed, studio ghibli style, vibrant colors, best quality, masterpiece",
+        "default_prompt": "anime style portrait, ghibli style, beautiful detailed anime art, vibrant colors",
     },
     "portrait_mode": {
         "model": "lucataco/remove-bg",
