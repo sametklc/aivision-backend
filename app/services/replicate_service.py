@@ -112,6 +112,15 @@ class ReplicateService:
         """Prepare inputs for video generation tools with verified parameters."""
         inputs = {}
 
+        # Get style from kwargs and apply to prompt if present
+        style = kwargs.get("style", "")
+
+        def apply_style_to_prompt(base_prompt: str, style_name: str) -> str:
+            """Append style to prompt if provided."""
+            if style_name and style_name.strip():
+                return f"{base_prompt}, {style_name} style"
+            return base_prompt
+
         match tool_id:
             case "ai_hug" | "image_to_video" | "video_expand":
                 # wan-video/wan-2.2-i2v-fast
@@ -123,7 +132,8 @@ class ReplicateService:
 
             case "text_to_video":
                 # bytedance/seedance-1-lite
-                inputs["prompt"] = prompt or config.get("default_prompt", "cinematic video")
+                base_prompt = prompt or config.get("default_prompt", "cinematic video")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
                 # Duration: 2-12 seconds
                 duration = kwargs.get("duration", config.get("default_duration", 5))
                 inputs["duration"] = max(2, min(12, int(duration)))
@@ -136,7 +146,8 @@ class ReplicateService:
 
             case "script_to_video":
                 # minimax/video-01 for longer scripts
-                inputs["prompt"] = prompt or config.get("default_prompt", "cinematic video")
+                base_prompt = prompt or config.get("default_prompt", "cinematic video")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
                 inputs["prompt_optimizer"] = False
 
             case "talking_head":
@@ -213,6 +224,15 @@ class ReplicateService:
         """Prepare inputs for photo enhancement tools with verified parameters."""
         inputs = {}
 
+        # Get style from kwargs and apply to prompt if present
+        style = kwargs.get("style", "")
+
+        def apply_style_to_prompt(base_prompt: str, style_name: str) -> str:
+            """Append style to prompt if provided."""
+            if style_name and style_name.strip():
+                return f"{base_prompt}, {style_name} style"
+            return base_prompt
+
         match tool_id:
             case "face_clarify":
                 # tencentarc/gfpgan (verified hash)
@@ -260,11 +280,14 @@ class ReplicateService:
                 inputs["codeformer_fidelity"] = 0.7
 
             case "anime_yourself":
-                # aaronaftab/mirage-ghibli - Ghibli-style anime transformation
+                # asiryan/meina-mix-v11 - Anime style transformation
                 inputs["image"] = image_url
-                inputs["prompt"] = prompt or config.get("default_prompt", "anime style portrait, ghibli style, beautiful detailed anime art")
-                inputs["prompt_strength"] = 0.78  # Recommended range: 0.76-0.8
-                inputs["go_fast"] = True
+                base_prompt = prompt or config.get("default_prompt", "anime style portrait, beautiful detailed anime art, vibrant colors, masterpiece")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                inputs["negative_prompt"] = "ugly, blurry, low quality, deformed, disfigured"
+                inputs["strength"] = 0.65  # Balance between original and anime
+                inputs["num_inference_steps"] = 30
+                inputs["guidance_scale"] = 7.5
 
             case "portrait_mode":
                 # lucataco/remove-bg (verified hash)
@@ -316,6 +339,15 @@ class ReplicateService:
         """Prepare inputs for magic edit tools with verified parameters."""
         inputs = {}
 
+        # Get style from kwargs and apply to prompt if present
+        style = kwargs.get("style", "")
+
+        def apply_style_to_prompt(base_prompt: str, style_name: str) -> str:
+            """Append style to prompt if provided."""
+            if style_name and style_name.strip():
+                return f"{base_prompt}, {style_name} style"
+            return base_prompt
+
         match tool_id:
             case "magic_eraser":
                 # bria/eraser - SOTA object removal
@@ -329,8 +361,18 @@ class ReplicateService:
             case "ai_headshot":
                 # tencentarc/photomaker (verified hash)
                 inputs["input_image"] = image_url
-                inputs["prompt"] = prompt or config.get("default_prompt")
-                inputs["style_name"] = "Photographic (Default)"
+                base_prompt = prompt or config.get("default_prompt")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                # Map style to photomaker style_name if applicable
+                style_mapping = {
+                    "cinematic": "Cinematic",
+                    "anime": "Comic book",
+                    "digital art": "Digital Art",
+                    "fantasy": "Fantasy art",
+                    "neon": "Neon punk",
+                    "lowpoly": "Lowpoly",
+                }
+                inputs["style_name"] = style_mapping.get(style.lower(), "Photographic (Default)") if style else "Photographic (Default)"
                 inputs["num_steps"] = 20
                 inputs["guidance_scale"] = 5
                 inputs["style_strength_ratio"] = 20
@@ -348,7 +390,8 @@ class ReplicateService:
                 # black-forest-labs/flux-fill-schnell (inpainting)
                 inputs["image"] = image_url
                 inputs["mask"] = mask_url
-                inputs["prompt"] = prompt or config.get("default_prompt", "seamless natural blend")
+                base_prompt = prompt or config.get("default_prompt", "seamless natural blend")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
                 inputs["num_inference_steps"] = 4
                 inputs["guidance_scale"] = 3.5
 
@@ -360,7 +403,8 @@ class ReplicateService:
             case "interior_design":
                 # adirik/interior-design (verified hash)
                 inputs["image"] = image_url
-                inputs["prompt"] = prompt or config.get("default_prompt")
+                base_prompt = prompt or config.get("default_prompt")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
                 inputs["num_inference_steps"] = 50
                 inputs["guidance_scale"] = 7.5
 
@@ -368,14 +412,16 @@ class ReplicateService:
                 # zsxkib/ic-light (same as relight, for product photography)
                 # NOTE: ic-light requires "subject_image" not "image"
                 inputs["subject_image"] = image_url
-                inputs["prompt"] = prompt or config.get("default_prompt")
+                base_prompt = prompt or config.get("default_prompt")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
                 inputs["light_source"] = "Top Light"
                 inputs["num_inference_steps"] = 25
 
             case "text_effects":
                 # jagilley/controlnet-canny (verified hash)
                 inputs["image"] = image_url
-                inputs["prompt"] = prompt or "stylized text with effects"
+                base_prompt = prompt or "stylized text with effects"
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
                 inputs["num_samples"] = "1"
                 inputs["image_resolution"] = "512"
                 inputs["ddim_steps"] = 20
