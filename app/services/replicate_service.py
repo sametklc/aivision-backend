@@ -257,6 +257,7 @@ class ReplicateService:
                 inputs["image"] = image_url
                 inputs["scale"] = 2  # Force 2x to save cost
                 inputs["face_enhance"] = kwargs.get("face_enhance", False)
+                inputs["tile"] = 400  # Enable tiling for large images (max GPU memory fix)
 
             case "relight":
                 # zsxkib/ic-light (verified hash)
