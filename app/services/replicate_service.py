@@ -260,17 +260,23 @@ class ReplicateService:
                 inputs["tile"] = 400  # Enable tiling for large images (max GPU memory fix)
 
             case "relight":
-                # zsxkib/ic-light (verified hash)
+                # zsxkib/ic-light - portrait relighting with text guidance
                 # NOTE: ic-light requires "subject_image" not "image"
                 inputs["subject_image"] = image_url
-                inputs["prompt"] = prompt or config.get("default_prompt", "professional studio lighting")
-                inputs["light_source"] = kwargs.get("light_source", "Left Light")
-                inputs["num_inference_steps"] = 25
+                inputs["prompt"] = prompt or config.get("default_prompt", "soft natural lighting, professional photo")
+                # Better parameters for realistic relighting
+                inputs["light_source"] = kwargs.get("light_source", "None")  # Let AI decide
+                inputs["steps"] = 25
+                inputs["cfg"] = 2.0  # Lower CFG for more natural results
+                inputs["highres_scale"] = 1.5  # Better quality output
+                inputs["lowres_denoise"] = 0.9
+                inputs["highres_denoise"] = 0.5
 
             case "low_light_fix":
-                # megvii-research/nafnet (verified hash)
+                # mingcv/bread - specialized for low-light image enhancement
                 inputs["image"] = image_url
-                inputs["model"] = "SIDD"  # Denoising model for low light
+                inputs["gamma"] = kwargs.get("gamma", 1.2)  # Brightness boost
+                inputs["strength"] = kwargs.get("strength", 0.05)  # Noise reduction
 
             case "denoise":
                 # sczhou/codeformer (verified hash)

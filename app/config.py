@@ -218,19 +218,19 @@ AI_MODELS = {
     },
     "relight": {
         "model": "zsxkib/ic-light",
-        "version": "d41bcb10d8c159868f4cfbd7c6a2ca01484f7d39e4613419d5952c61562f1ba7",
+        "version": None,  # Use latest version for better results
         "category": "photo_enhance",
         "description": "Change lighting in photos",
         "cost_per_run": 0.008,
         "supports": ["image", "prompt"],
-        "default_prompt": "professional studio lighting, soft shadows",
+        "default_prompt": "soft natural lighting, professional photo",
     },
     "low_light_fix": {
-        "model": "megvii-research/nafnet",
-        "version": "018241a6c880319404eaa2714b764313e27e11f950a7ff0a7b5b37b27b74dcf7",
+        "model": "mingcv/bread",
+        "version": None,  # Use latest - specialized for low-light enhancement
         "category": "photo_enhance",
         "description": "Brighten dark photos naturally",
-        "cost_per_run": 0.003,
+        "cost_per_run": 0.001,
         "supports": ["image"],
     },
     "scratch_remover": {
