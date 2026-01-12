@@ -196,8 +196,14 @@ class ReplicateService:
             case "talking_head":
                 # lucataco/sadtalker - talking face animation
                 # This is handled specially in generate_video() for TTS pipeline
+                audio_url = kwargs.get("audio_url")
+                if not image_url:
+                    raise ValueError("Talking Head requires a source image (portrait photo)")
+                if not audio_url:
+                    raise ValueError("Talking Head requires audio. Please record or upload audio, or use AI Voice mode.")
+
                 inputs["source_image"] = image_url
-                inputs["driven_audio"] = kwargs.get("audio_url")
+                inputs["driven_audio"] = audio_url
                 inputs["preprocess"] = "crop"  # crop, resize, or full
                 # enhancer options: "gfpgan", "RestoreFormer" or omit
                 if kwargs.get("enhancer"):
