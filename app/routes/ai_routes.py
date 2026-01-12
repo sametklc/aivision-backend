@@ -82,6 +82,7 @@ async def generate(
         "mask_url": request.mask_url,  # Mask for inpainting tools
         "audio_url": request.audio_url,  # Audio for talking_head
         "video_url": request.video_url,  # Video for video_expand
+        "style_url": request.style_url,  # Style image for style_transfer
         "prompt": request.prompt,
         "negative_prompt": request.negative_prompt,
         "style": request.style,

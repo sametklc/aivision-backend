@@ -374,9 +374,21 @@ AI_MODELS = {
         "cost_per_run": 0.003,
         "supports": ["image", "mask", "prompt"],
     },
+    # ─────────────────────────────────────────────────────────────────────
+    # CREATIVE TOOLS
+    # ─────────────────────────────────────────────────────────────────────
+    "style_transfer": {
+        "model": "fofr/style-transfer",
+        "version": "f1023890703bc0a5a3a2c21b5e498833be5f6ef6e70e9daf6b9b3a4fd8309cf0",
+        "category": "magic_edit",
+        "description": "Apply artistic styles to photos",
+        "cost_per_run": 0.02,
+        "supports": ["image", "style"],
+        "default_scale": 5,
+    },
 }
 
-# Tool categories for frontend - All 33 Tools
+# Tool categories for frontend - All 33 Tools + 1 new
 TOOL_CATEGORIES = {
     "VIDEO_AI": [
         "ai_hug", "image_to_video", "text_to_video", "talking_head",
@@ -391,6 +403,6 @@ TOOL_CATEGORIES = {
     "MAGIC_EDIT": [
         "magic_eraser", "ai_headshot", "clothes_swap", "bg_remix",
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
-        "product_shoot", "text_effects", "tattoo_tryon"
+        "product_shoot", "text_effects", "tattoo_tryon", "style_transfer"
     ]
 }

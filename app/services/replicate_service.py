@@ -705,6 +705,15 @@ class ReplicateService:
                 inputs["ddim_steps"] = 20
                 inputs["scale"] = 9
 
+            case "style_transfer":
+                # fofr/style-transfer - High-end artistic style transfer
+                style_url = kwargs.get("style_url")
+                if not style_url:
+                    raise ValueError("Style Transfer requires a style reference image")
+                inputs["image"] = image_url  # Content image
+                inputs["style"] = style_url  # Style reference image
+                inputs["scale"] = config.get("default_scale", 5)  # Stylization strength
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -947,7 +956,7 @@ class ReplicateService:
             "magic_eraser": 8, "ai_headshot": 15, "clothes_swap": 25,
             "bg_remix": 10, "sticker_maker": 5, "outpainting": 10,
             "sky_replace": 10, "interior_design": 20, "product_shoot": 15,
-            "text_effects": 10, "tattoo_tryon": 10,
+            "text_effects": 10, "tattoo_tryon": 10, "style_transfer": 15,
         }
         return time_estimates.get(tool_id, 15)
 
@@ -968,7 +977,7 @@ class ReplicateService:
             "magic_eraser": 3, "ai_headshot": 5, "clothes_swap": 5,
             "bg_remix": 3, "sticker_maker": 2, "outpainting": 3,
             "sky_replace": 3, "interior_design": 4, "product_shoot": 3,
-            "text_effects": 3, "tattoo_tryon": 3,
+            "text_effects": 3, "tattoo_tryon": 3, "style_transfer": 4,
         }
         return costs.get(tool_id, 2)
 
