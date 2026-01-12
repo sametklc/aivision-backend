@@ -119,9 +119,11 @@ AI_MODELS = {
         "model": "lucataco/sadtalker",
         "version": "85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b",
         "category": "video",
-        "description": "Lip sync any portrait photo",
-        "cost_per_run": 0.15,
-        "supports": ["image", "audio"],
+        "description": "Make your photo talk with text or audio",
+        "cost_per_run": 0.20,  # TTS + SadTalker combined
+        "supports": ["image", "text", "audio"],
+        "tts_model": "resemble-ai/chatterbox",
+        "tts_version": "1b8422bc49635c20d0a84e387ed20879c0dd09254ecdb4e75dc4bec10ff94e97",
     },
     "video_expand": {
         "model": "wan-video/wan-2.2-i2v-fast",

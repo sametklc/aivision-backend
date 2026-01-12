@@ -92,6 +92,20 @@ class ReplicateService:
         if not model_config:
             return False, f"Unknown tool: {tool_id}"
 
+        # Special handling for talking_head with TTS pipeline
+        if tool_id == "talking_head" and prompt and not kwargs.get("audio_url"):
+            # Step 1: Generate audio from text using Chatterbox TTS
+            voice_gender = kwargs.get("voice_gender", "female")  # male or female
+            logger.info(f"[TTS] Generating {voice_gender} speech from text: {prompt[:50]}...")
+            tts_success, tts_result = await self._generate_tts(prompt, model_config, voice_gender)
+            if not tts_success:
+                return False, f"TTS failed: {tts_result}"
+
+            # Step 2: Use generated audio URL for SadTalker
+            audio_url = tts_result.get("url") if isinstance(tts_result, dict) else tts_result
+            kwargs["audio_url"] = audio_url
+            logger.info(f"[TTS] Audio generated: {audio_url}")
+
         inputs = self._prepare_video_inputs(tool_id, image_url, prompt, model_config, kwargs)
 
         return await self._make_request(
@@ -99,6 +113,35 @@ class ReplicateService:
             inputs=inputs,
             category="video",
             version=model_config.get("version")
+        )
+
+    async def _generate_tts(
+        self,
+        text: str,
+        config: Dict[str, Any],
+        voice_gender: str = "female"
+    ) -> Tuple[bool, Any]:
+        """Generate speech from text using Chatterbox TTS."""
+        tts_model = config.get("tts_model", "resemble-ai/chatterbox")
+        tts_version = config.get("tts_version")
+
+        tts_inputs = {
+            "prompt": text,
+            "exaggeration": 0.5,  # Neutral emotion
+            "cfg_weight": 0.5,
+            "temperature": 0.8,
+        }
+
+        # Voice cloning: If user provides audio_prompt URL, use it
+        # Otherwise Chatterbox uses its default voice
+        # TODO: Add male/female voice sample URLs for gender-specific TTS
+        # For now, voice_gender parameter is reserved for future use
+
+        return await self._make_request(
+            model_path=tts_model,
+            inputs=tts_inputs,
+            category="tts",
+            version=tts_version
         )
 
     def _prepare_video_inputs(
@@ -151,12 +194,14 @@ class ReplicateService:
                 inputs["prompt_optimizer"] = False
 
             case "talking_head":
-                # lucataco/sadtalker (verified hash)
+                # lucataco/sadtalker - talking face animation
+                # This is handled specially in generate_video() for TTS pipeline
                 inputs["source_image"] = image_url
                 inputs["driven_audio"] = kwargs.get("audio_url")
-                inputs["still"] = False
-                inputs["use_enhancer"] = False
-                inputs["preprocess"] = "crop"
+                inputs["preprocess"] = "crop"  # crop, resize, or full
+                # enhancer options: "gfpgan", "RestoreFormer" or omit
+                if kwargs.get("enhancer"):
+                    inputs["enhancer"] = kwargs.get("enhancer")
 
             case "style_transfer_video":
                 # lucataco/animate-diff-vid2vid (verified hash)
@@ -265,7 +310,10 @@ class ReplicateService:
                 # zsxkib/ic-light - portrait relighting with text guidance
                 inputs["subject_image"] = image_url
                 inputs["prompt"] = prompt or config.get("default_prompt", "soft natural lighting, professional photo")
-                inputs["light_source"] = kwargs.get("light_source", "None")
+                # light_source options: "Left Light", "Right Light", "Top Light", "Bottom Light" or omit
+                light_source = kwargs.get("light_source")
+                if light_source and light_source != "None":
+                    inputs["light_source"] = light_source
                 inputs["steps"] = 25
                 inputs["cfg"] = 2.0
                 inputs["highres_scale"] = 1.5
@@ -273,9 +321,10 @@ class ReplicateService:
                 inputs["highres_denoise"] = 0.5
 
             case "low_light_fix":
-                # megvii-research/nafnet - image denoising/enhancement
+                # megvii-research/nafnet - image enhancement
                 inputs["image"] = image_url
-                inputs["task_type"] = "Image Denoising"
+                # Use deblurring for better low-light results
+                inputs["task_type"] = "Image Deblurring (REDS)"
 
             case "denoise":
                 # sczhou/codeformer (verified hash)
