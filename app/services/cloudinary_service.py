@@ -8,6 +8,8 @@ from typing import Optional, Tuple
 from loguru import logger
 import base64
 import uuid
+import tempfile
+import os
 
 from ..config import get_settings
 
@@ -144,6 +146,7 @@ class CloudinaryService:
             logger.warning("Cloudinary not configured")
             return False, None, "Cloudinary not configured"
 
+        temp_path = None
         try:
             # Generate unique ID if not provided
             if not public_id:
@@ -151,9 +154,14 @@ class CloudinaryService:
 
             logger.info(f"Uploading video to Cloudinary ({len(video_data)} bytes)...")
 
+            # Save to temp file first (upload_large needs file path)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+                temp_file.write(video_data)
+                temp_path = temp_file.name
+
             # Use upload_large for videos (handles chunked upload)
             result = cloudinary.uploader.upload_large(
-                video_data,
+                temp_path,
                 public_id=public_id,
                 folder=folder,
                 resource_type="video",
@@ -168,6 +176,10 @@ class CloudinaryService:
         except Exception as e:
             logger.error(f"Cloudinary video upload error: {str(e)}")
             return False, None, str(e)
+        finally:
+            # Clean up temp file
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
 
 
 # Global service instance
