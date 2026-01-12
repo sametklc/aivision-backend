@@ -123,6 +123,51 @@ class CloudinaryService:
             logger.error(f"Cloudinary base64 upload error: {str(e)}")
             return False, None, str(e)
 
+    async def upload_video(
+        self,
+        video_data: bytes,
+        folder: str = "aivision/videos",
+        public_id: Optional[str] = None
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Upload video to Cloudinary.
+
+        Args:
+            video_data: Raw video bytes
+            folder: Cloudinary folder name
+            public_id: Custom public ID (optional)
+
+        Returns:
+            Tuple of (success, url, error)
+        """
+        if not self._configured:
+            logger.warning("Cloudinary not configured")
+            return False, None, "Cloudinary not configured"
+
+        try:
+            # Generate unique ID if not provided
+            if not public_id:
+                public_id = f"{folder}/{uuid.uuid4().hex[:12]}"
+
+            logger.info(f"Uploading video to Cloudinary ({len(video_data)} bytes)...")
+
+            # Upload to Cloudinary as video resource
+            result = cloudinary.uploader.upload(
+                video_data,
+                public_id=public_id,
+                folder=folder,
+                resource_type="video",  # Important: video resource type
+                overwrite=True,
+            )
+
+            url = result.get("secure_url")
+            logger.info(f"Video uploaded to Cloudinary: {url}")
+            return True, url, None
+
+        except Exception as e:
+            logger.error(f"Cloudinary video upload error: {str(e)}")
+            return False, None, str(e)
+
 
 # Global service instance
 cloudinary_service = CloudinaryService()

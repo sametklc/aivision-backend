@@ -98,3 +98,59 @@ async def upload_base64(
         "success": True,
         "url": url
     }
+
+
+@router.post("/video")
+async def upload_video(
+    file: UploadFile = File(...),
+    folder: Optional[str] = Form(default="aivision/videos")
+):
+    """
+    Upload video to Cloudinary CDN.
+
+    Returns the public URL of the uploaded video.
+    Accepts MP4, MOV, AVI, MKV, and WebM formats.
+    Max size: 100MB
+    """
+    # Validate file type
+    allowed_types = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/x-matroska", "video/webm"]
+    if not file.content_type or file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File must be a video (mp4, mov, avi, mkv, webm). Got: {file.content_type}"
+        )
+
+    # Check file size (max 100MB for videos)
+    contents = await file.read()
+    if len(contents) > 100 * 1024 * 1024:  # 100MB
+        raise HTTPException(
+            status_code=400,
+            detail="Video file size must be less than 100MB"
+        )
+
+    # Check if Cloudinary is configured
+    if not cloudinary_service.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Video upload service not configured"
+        )
+
+    # Upload to Cloudinary
+    success, url, error = await cloudinary_service.upload_video(
+        video_data=contents,
+        folder=folder
+    )
+
+    if not success:
+        logger.error(f"Video upload failed: {error}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Video upload failed: {error}"
+        )
+
+    return {
+        "success": True,
+        "url": url,
+        "filename": file.filename,
+        "size": len(contents)
+    }
