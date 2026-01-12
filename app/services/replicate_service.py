@@ -710,9 +710,11 @@ class ReplicateService:
                 style_url = kwargs.get("style_url")
                 if not style_url:
                     raise ValueError("Style Transfer requires a style reference image")
-                inputs["image"] = image_url  # Content image
-                inputs["style"] = style_url  # Style reference image
-                inputs["scale"] = config.get("default_scale", 5)  # Stylization strength
+                inputs["structure_image"] = image_url  # Content image (structure)
+                inputs["style_image"] = style_url  # Style reference image
+                inputs["prompt"] = "Apply the artistic style"
+                inputs["structure_denoising_strength"] = 0.65  # Preserve original structure
+                inputs["structure_depth_strength"] = 1.0
 
         return inputs
 
