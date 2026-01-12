@@ -225,6 +225,7 @@ class GenericAIRequest(BaseRequest):
     image_url_2: Optional[str] = Field(None, description="Secondary image URL or base64 data URI")
     mask_url: Optional[str] = Field(None, description="Mask image URL or base64 data URI for inpainting")
     audio_url: Optional[str] = Field(None, description="Audio URL or base64 data URI for talking_head")
+    video_url: Optional[str] = Field(None, description="Video URL for video_expand")
     prompt: Optional[str] = Field(None, description="Text prompt")
     negative_prompt: Optional[str] = Field(None, description="Negative prompt")
     style: Optional[str] = Field(None, description="Style selection")

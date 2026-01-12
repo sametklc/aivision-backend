@@ -7,6 +7,10 @@ All model IDs and version hashes have been tested and verified.
 """
 import replicate
 import asyncio
+import subprocess
+import tempfile
+import os
+import httpx
 from typing import Optional, Dict, Any, Tuple
 from loguru import logger
 from ..config import get_settings, AI_MODELS, COST_LIMITS
@@ -106,6 +110,15 @@ class ReplicateService:
             kwargs["audio_url"] = audio_url
             logger.info(f"[TTS] Audio generated: {audio_url}")
 
+        # Special handling for video_expand: extract last frame + stitch
+        if tool_id == "video_expand":
+            video_url = kwargs.get("video_url")
+            if not video_url:
+                return False, "Video Expand requires a video file"
+
+            logger.info(f"[VIDEO_EXPAND] Processing video: {video_url}")
+            return await self._process_video_expand(video_url, prompt, model_config)
+
         inputs = self._prepare_video_inputs(tool_id, image_url, prompt, model_config, kwargs)
 
         return await self._make_request(
@@ -144,6 +157,199 @@ class ReplicateService:
             version=tts_version
         )
 
+    async def _process_video_expand(
+        self,
+        video_url: str,
+        prompt: Optional[str],
+        config: Dict[str, Any]
+    ) -> Tuple[bool, Any]:
+        """
+        Process video expansion:
+        1. Download input video
+        2. Extract last frame using FFmpeg
+        3. Call Replicate model with last frame
+        4. Download generated continuation
+        5. Stitch videos together
+        6. Return final video URL
+        """
+        temp_dir = None
+        try:
+            # Create temp directory for processing
+            temp_dir = tempfile.mkdtemp(prefix="video_expand_")
+            input_video_path = os.path.join(temp_dir, "input.mp4")
+            last_frame_path = os.path.join(temp_dir, "last_frame.jpg")
+            generated_video_path = os.path.join(temp_dir, "generated.mp4")
+            output_video_path = os.path.join(temp_dir, "output.mp4")
+
+            # Step 1: Download input video
+            logger.info(f"[VIDEO_EXPAND] Downloading input video...")
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.get(video_url)
+                response.raise_for_status()
+                with open(input_video_path, "wb") as f:
+                    f.write(response.content)
+            logger.info(f"[VIDEO_EXPAND] Input video downloaded: {len(response.content)} bytes")
+
+            # Step 2: Extract last frame using FFmpeg
+            logger.info(f"[VIDEO_EXPAND] Extracting last frame...")
+            extract_cmd = [
+                "ffmpeg", "-y",
+                "-sseof", "-0.1",  # Seek to 0.1 seconds before end
+                "-i", input_video_path,
+                "-vframes", "1",
+                "-q:v", "2",  # High quality JPEG
+                last_frame_path
+            ]
+            result = await asyncio.to_thread(
+                subprocess.run, extract_cmd,
+                capture_output=True, text=True
+            )
+            if result.returncode != 0:
+                logger.error(f"FFmpeg extract error: {result.stderr}")
+                return False, f"Failed to extract last frame: {result.stderr}"
+            logger.info(f"[VIDEO_EXPAND] Last frame extracted: {last_frame_path}")
+
+            # Step 3: Upload last frame to get URL (using data URI for simplicity)
+            import base64
+            with open(last_frame_path, "rb") as f:
+                frame_data = f.read()
+            frame_base64 = base64.b64encode(frame_data).decode("utf-8")
+            frame_data_uri = f"data:image/jpeg;base64,{frame_base64}"
+
+            # Step 4: Call Replicate model with last frame
+            logger.info(f"[VIDEO_EXPAND] Generating continuation with AI...")
+            inputs = {
+                "image": frame_data_uri,
+                "prompt": prompt or config.get("default_prompt", "Continue the motion smoothly, high quality"),
+                "num_frames": 81,  # ~5 seconds at 16fps
+                "resolution": "480p",
+                "frames_per_second": 16,
+            }
+
+            success, gen_result = await self._make_request(
+                model_path=config["model"],
+                inputs=inputs,
+                category="video",
+                version=config.get("version")
+            )
+
+            if not success:
+                return False, f"AI generation failed: {gen_result}"
+
+            # Get generated video URL
+            gen_video_url = gen_result.get("url") if isinstance(gen_result, dict) else gen_result
+            if not gen_video_url:
+                return False, "No video URL in generation result"
+            logger.info(f"[VIDEO_EXPAND] Generated video URL: {gen_video_url}")
+
+            # Step 5: Download generated video
+            logger.info(f"[VIDEO_EXPAND] Downloading generated video...")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.get(gen_video_url)
+                response.raise_for_status()
+                with open(generated_video_path, "wb") as f:
+                    f.write(response.content)
+            logger.info(f"[VIDEO_EXPAND] Generated video downloaded: {len(response.content)} bytes")
+
+            # Step 6: Get input video properties (fps, resolution)
+            width, height, fps = 480, 480, 16  # Default values
+            probe_cmd = [
+                "ffprobe", "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=width,height,r_frame_rate",
+                "-of", "csv=p=0",
+                input_video_path
+            ]
+            probe_result = await asyncio.to_thread(
+                subprocess.run, probe_cmd,
+                capture_output=True, text=True
+            )
+            if probe_result.returncode == 0:
+                # Parse: width,height,fps_num/fps_den
+                parts = probe_result.stdout.strip().split(",")
+                if len(parts) >= 3:
+                    width, height = int(parts[0]), int(parts[1])
+                    fps_parts = parts[2].split("/")
+                    fps = int(fps_parts[0]) / int(fps_parts[1]) if len(fps_parts) == 2 else 16
+            logger.info(f"[VIDEO_EXPAND] Input video: {width}x{height} @ {fps}fps")
+
+            # Step 7: Re-encode generated video to match input
+            normalized_gen_path = os.path.join(temp_dir, "generated_normalized.mp4")
+            normalize_cmd = [
+                "ffmpeg", "-y",
+                "-i", generated_video_path,
+                "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
+                "-r", str(int(fps)),
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23",
+                "-an",  # Remove audio from generated
+                normalized_gen_path
+            ]
+            norm_result = await asyncio.to_thread(
+                subprocess.run, normalize_cmd,
+                capture_output=True, text=True
+            )
+            if norm_result.returncode != 0:
+                logger.warning(f"Normalize failed, using original: {norm_result.stderr}")
+                normalized_gen_path = generated_video_path
+
+            # Step 8: Create concat file
+            concat_file_path = os.path.join(temp_dir, "concat.txt")
+            with open(concat_file_path, "w") as f:
+                f.write(f"file '{input_video_path}'\n")
+                f.write(f"file '{normalized_gen_path}'\n")
+
+            # Step 9: Stitch videos using FFmpeg concat demuxer
+            logger.info(f"[VIDEO_EXPAND] Stitching videos...")
+            stitch_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_file_path,
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                output_video_path
+            ]
+            stitch_result = await asyncio.to_thread(
+                subprocess.run, stitch_cmd,
+                capture_output=True, text=True
+            )
+            if stitch_result.returncode != 0:
+                logger.error(f"FFmpeg stitch error: {stitch_result.stderr}")
+                return False, f"Failed to stitch videos: {stitch_result.stderr}"
+            logger.info(f"[VIDEO_EXPAND] Videos stitched successfully")
+
+            # Step 10: Read final video and return as base64 data URI
+            # (In production, you'd upload to cloud storage and return URL)
+            with open(output_video_path, "rb") as f:
+                final_video_data = f.read()
+
+            final_base64 = base64.b64encode(final_video_data).decode("utf-8")
+            final_data_uri = f"data:video/mp4;base64,{final_base64}"
+
+            logger.info(f"[VIDEO_EXPAND] Complete! Final video size: {len(final_video_data)} bytes")
+            return True, {"url": final_data_uri}
+
+        except httpx.HTTPError as e:
+            logger.error(f"[VIDEO_EXPAND] HTTP error: {e}")
+            return False, f"Download failed: {str(e)}"
+        except Exception as e:
+            logger.error(f"[VIDEO_EXPAND] Error: {e}")
+            return False, str(e)
+        finally:
+            # Cleanup temp files
+            if temp_dir and os.path.exists(temp_dir):
+                import shutil
+                try:
+                    shutil.rmtree(temp_dir)
+                    logger.debug(f"[VIDEO_EXPAND] Cleaned up temp dir: {temp_dir}")
+                except Exception as e:
+                    logger.warning(f"[VIDEO_EXPAND] Failed to cleanup temp dir: {e}")
+
     def _prepare_video_inputs(
         self,
         tool_id: str,
@@ -165,11 +371,20 @@ class ReplicateService:
             return base_prompt
 
         match tool_id:
-            case "ai_hug" | "image_to_video" | "video_expand":
+            case "ai_hug" | "image_to_video":
                 # wan-video/wan-2.2-i2v-fast
                 inputs["image"] = image_url
                 inputs["prompt"] = prompt or config.get("default_prompt", "smooth cinematic motion")
                 inputs["num_frames"] = 81  # Minimum required
+                inputs["resolution"] = "480p"
+                inputs["frames_per_second"] = 16
+
+            case "video_expand":
+                # This is handled specially in generate_video() for frame extraction + stitching
+                # The image_url here will be the extracted last frame
+                inputs["image"] = image_url
+                inputs["prompt"] = prompt or config.get("default_prompt", "Continue the motion smoothly, high quality")
+                inputs["num_frames"] = 81  # ~5 seconds at 16fps
                 inputs["resolution"] = "480p"
                 inputs["frames_per_second"] = 16
 
