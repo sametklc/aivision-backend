@@ -253,30 +253,29 @@ class ReplicateService:
                 inputs["render_factor"] = 35
 
             case "4k_upscale":
-                # nightmareai/real-esrgan (verified hash)
+                # cjwbw/supir-v0q - SUPIR image upscaler
                 inputs["image"] = image_url
-                inputs["scale"] = 2  # Force 2x to save cost
-                inputs["face_enhance"] = kwargs.get("face_enhance", False)
-                inputs["tile"] = 400  # Enable tiling for large images (max GPU memory fix)
+                inputs["upscale"] = kwargs.get("scale", 2)
+                inputs["min_size"] = 1024
+                inputs["edm_steps"] = 30  # Balance quality/speed
+                inputs["s_cfg"] = 7.5
+                inputs["color_fix_type"] = "Wavelet"
 
             case "relight":
                 # zsxkib/ic-light - portrait relighting with text guidance
-                # NOTE: ic-light requires "subject_image" not "image"
                 inputs["subject_image"] = image_url
                 inputs["prompt"] = prompt or config.get("default_prompt", "soft natural lighting, professional photo")
-                # Better parameters for realistic relighting
-                inputs["light_source"] = kwargs.get("light_source", "None")  # Let AI decide
+                inputs["light_source"] = kwargs.get("light_source", "None")
                 inputs["steps"] = 25
-                inputs["cfg"] = 2.0  # Lower CFG for more natural results
-                inputs["highres_scale"] = 1.5  # Better quality output
+                inputs["cfg"] = 2.0
+                inputs["highres_scale"] = 1.5
                 inputs["lowres_denoise"] = 0.9
                 inputs["highres_denoise"] = 0.5
 
             case "low_light_fix":
-                # mingcv/bread - specialized for low-light image enhancement
+                # megvii-research/nafnet - image denoising/enhancement
                 inputs["image"] = image_url
-                inputs["gamma"] = kwargs.get("gamma", 1.2)  # Brightness boost
-                inputs["strength"] = kwargs.get("strength", 0.05)  # Noise reduction
+                inputs["task_type"] = "Image Denoising"
 
             case "denoise":
                 # sczhou/codeformer (verified hash)

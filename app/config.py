@@ -209,16 +209,16 @@ AI_MODELS = {
         "supports": ["image"],
     },
     "4k_upscale": {
-        "model": "nightmareai/real-esrgan",
-        "version": None,  # Use latest version
+        "model": "cjwbw/supir-v0q",
+        "version": "ede69f6a5ae7d09f769d683347325b08d2f83a93d136ed89747941205e0a71da",
         "category": "photo_enhance",
         "description": "Enhance images to 4K resolution",
-        "cost_per_run": 0.002,
+        "cost_per_run": 0.05,
         "supports": ["image", "scale"],
     },
     "relight": {
         "model": "zsxkib/ic-light",
-        "version": None,  # Use latest version for better results
+        "version": "d41bcb10d8c159868f4cfbd7c6a2ca01484f7d39e4613419d5952c61562f1ba7",
         "category": "photo_enhance",
         "description": "Change lighting in photos",
         "cost_per_run": 0.008,
@@ -226,11 +226,11 @@ AI_MODELS = {
         "default_prompt": "soft natural lighting, professional photo",
     },
     "low_light_fix": {
-        "model": "mingcv/bread",
-        "version": None,  # Use latest - specialized for low-light enhancement
+        "model": "megvii-research/nafnet",
+        "version": "018241a6c880319404eaa2714b764313e27e11f950a7ff0a7b5b37b27b74dcf7",
         "category": "photo_enhance",
         "description": "Brighten dark photos naturally",
-        "cost_per_run": 0.001,
+        "cost_per_run": 0.024,
         "supports": ["image"],
     },
     "scratch_remover": {
