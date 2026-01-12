@@ -147,17 +147,18 @@ class CloudinaryService:
         try:
             # Generate unique ID if not provided
             if not public_id:
-                public_id = f"{folder}/{uuid.uuid4().hex[:12]}"
+                public_id = f"{uuid.uuid4().hex[:12]}"
 
             logger.info(f"Uploading video to Cloudinary ({len(video_data)} bytes)...")
 
-            # Upload to Cloudinary as video resource
-            result = cloudinary.uploader.upload(
+            # Use upload_large for videos (handles chunked upload)
+            result = cloudinary.uploader.upload_large(
                 video_data,
                 public_id=public_id,
                 folder=folder,
-                resource_type="video",  # Important: video resource type
+                resource_type="video",
                 overwrite=True,
+                chunk_size=6000000,  # 6MB chunks
             )
 
             url = result.get("secure_url")
