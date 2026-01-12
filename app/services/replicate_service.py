@@ -407,12 +407,14 @@ class ReplicateService:
                 inputs["image"] = image_url
 
             case "interior_design":
-                # adirik/interior-design (verified hash)
+                # adirik/interior-design - room redesign AI
                 inputs["image"] = image_url
-                base_prompt = prompt or config.get("default_prompt")
+                base_prompt = prompt or config.get("default_prompt", "modern interior design, stylish furniture")
                 inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                inputs["negative_prompt"] = "lowres, watermark, banner, logo, text, deformed, blurry, blur, out of focus, ugly"
                 inputs["num_inference_steps"] = 50
-                inputs["guidance_scale"] = 7.5
+                inputs["guidance_scale"] = 15
+                inputs["prompt_strength"] = 0.8
 
             case "product_shoot":
                 # zsxkib/ic-light (same as relight, for product photography)

@@ -340,7 +340,7 @@ AI_MODELS = {
     },
     "interior_design": {
         "model": "adirik/interior-design",
-        "version": "76619655695840563d7ce461876a43876e5df48545a0b730598711e133dfd535",
+        "version": "76604baddc85b1b4616e1c6475eca080da339c8875bd4996705440484a6eac38",
         "category": "magic_edit",
         "description": "Redesign room interiors",
         "cost_per_run": 0.012,
