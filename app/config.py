@@ -126,13 +126,15 @@ AI_MODELS = {
         "tts_version": "1b8422bc49635c20d0a84e387ed20879c0dd09254ecdb4e75dc4bec10ff94e97",
     },
     "video_expand": {
-        "model": "wan-video/wan-2.2-i2v-fast",
+        "model": "kwaivgi/kling-v2.5-turbo-pro",
         "version": None,
         "category": "video",
-        "description": "Extend video canvas seamlessly",
-        "cost_per_run": 0.05,
-        "supports": ["video", "direction", "prompt"],
-        "note": "Use last frame logic for continuation",
+        "description": "Extend video with AI imagination",
+        "cost_per_run": 0.35,  # ~$0.07/sec for 5 sec
+        "supports": ["video", "prompt"],
+        "note": "Uses Kling v2.5 for prompt-guided video continuation with new content generation",
+        "default_prompt": "Continue the video smoothly with cinematic motion",
+        "duration": 5,  # 5 or 10 seconds
     },
     "style_transfer_video": {
         "model": "lucataco/animate-diff-vid2vid",

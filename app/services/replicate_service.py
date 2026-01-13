@@ -251,17 +251,19 @@ class ReplicateService:
             frame_base64 = base64.b64encode(frame_data).decode("utf-8")
             frame_data_uri = f"data:image/jpeg;base64,{frame_base64}"
 
-            # Build the prompt - note: wan-video is image-to-video, prompt affects motion style
-            final_prompt = prompt or config.get("default_prompt", "Continue the motion smoothly, high quality")
-            logger.info(f"[VIDEO_EXPAND] Step 4: Generating with prompt: '{final_prompt}'")
+            # Build the prompt - Kling v2.5 follows prompts well for NEW content generation
+            final_prompt = prompt or config.get("default_prompt", "Continue the video smoothly with cinematic motion")
+            logger.info(f"[VIDEO_EXPAND] Step 4: Generating with Kling v2.5, prompt: '{final_prompt}'")
 
-            # Step 5: Call Replicate model with last frame
+            # Step 5: Call Kling v2.5 with last frame as start_image
+            # Kling uses start_image (URI) for image-to-video with strong prompt following
             inputs = {
-                "image": frame_data_uri,
                 "prompt": final_prompt,
-                "num_frames": 81,
-                "resolution": "480p",
-                "frames_per_second": 16,
+                "start_image": frame_data_uri,  # Last frame as starting point
+                "duration": config.get("duration", 5),  # 5 or 10 seconds
+                "aspect_ratio": "16:9",  # Match common video format
+                "negative_prompt": "blurry, low quality, distorted, glitch, static",
+                "guidance_scale": 0.7,  # Higher = stronger prompt following
             }
 
             success, gen_result = await self._make_request(
