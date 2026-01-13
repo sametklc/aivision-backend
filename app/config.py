@@ -145,8 +145,8 @@ AI_MODELS = {
         "supports": ["video", "style", "prompt"],
     },
     "super_slowmo": {
-        "model": "pollinations/rife-video-interpolation",
-        "version": None,  # Use latest version
+        "model": "fofr/video-frame-interpolation",
+        "version": None,  # Use latest version - RIFE 4.22
         "category": "video",
         "description": "Create cinematic slow motion",
         "cost_per_run": 0.08,
