@@ -623,8 +623,9 @@ class ReplicateService:
                 style_url = kwargs.get("style_url")
                 if not style_url:
                     raise ValueError("Style Transfer requires a style reference image")
-                inputs["image"] = image_url   # User's photo (content)
-                inputs["style"] = style_url   # Style reference image
+                # CORRECT PARAMETER NAMES for fofr/style-transfer:
+                inputs["structure_image"] = image_url  # User's photo (to preserve structure)
+                inputs["style_image"] = style_url      # Style reference image (required)
                 # CRITICAL: Low denoising preserves face (0.5 = face visible, style applied)
                 inputs["structure_denoising_strength"] = config.get("structure_denoising_strength", 0.5)
                 # Max depth preservation for skeleton/structure
