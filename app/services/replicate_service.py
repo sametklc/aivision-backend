@@ -837,6 +837,24 @@ class ReplicateService:
                 inputs["num_inference_steps"] = config.get("num_inference_steps", 40)
                 inputs["guidance_scale"] = config.get("guidance_scale", 7.5)
 
+            case "baby_prediction":
+                # smoosh-sh/baby-mystic - Predict baby face from two parents
+                # Requires TWO images: image (man) and image2 (woman)
+                image2_url = kwargs.get("image2_url")
+                if not image_url:
+                    raise ValueError("Baby Prediction requires father's image")
+                if not image2_url:
+                    raise ValueError("Baby Prediction requires mother's image")
+                inputs["image"] = image_url      # Man's image (father)
+                inputs["image2"] = image2_url    # Woman's image (mother)
+                # Gender selection: "boy" or "girl"
+                gender = kwargs.get("gender", "boy")
+                inputs["gender"] = gender if gender in ["boy", "girl"] else "boy"
+                # Quality params from config
+                inputs["steps"] = config.get("steps", 25)
+                inputs["width"] = config.get("width", 512)
+                inputs["height"] = config.get("height", 728)
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════

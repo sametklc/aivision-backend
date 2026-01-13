@@ -429,6 +429,18 @@ AI_MODELS = {
         "structure_denoising_strength": 0.5,  # Lower = better face preservation (0.5 ideal)
         "structure_depth_strength": 1.2,       # Max depth preservation for skeleton
     },
+    "baby_prediction": {
+        "model": "smoosh-sh/baby-mystic",
+        "version": "ba5ab694a9df055fa469e55eeab162cc288039da0abd8b19d956980cc3b49f6d",
+        "category": "magic_edit",
+        "description": "Predict what your baby would look like",
+        "cost_per_run": 0.01,
+        "supports": ["image", "image2", "gender"],
+        # Baby-Mystic params
+        "steps": 25,
+        "width": 512,
+        "height": 728,
+    },
 }
 
 # Tool categories for frontend - All 33 Tools + 1 new
@@ -447,6 +459,6 @@ TOOL_CATEGORIES = {
         "magic_eraser", "ai_headshot", "clothes_swap", "bg_remix",
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
         "product_shoot", "text_effects", "tattoo_tryon", "style_transfer",
-        "time_machine", "retro_style"
+        "time_machine", "retro_style", "baby_prediction"
     ]
 }
