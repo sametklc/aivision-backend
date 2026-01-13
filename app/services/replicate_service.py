@@ -485,7 +485,7 @@ class ReplicateService:
                 # lucataco/real-esrgan-video (verified hash)
                 # Params: video_path, resolution (FHD/2k/4k), model
                 inputs["video_path"] = kwargs.get("video_url")
-                inputs["resolution"] = "2k"  # 2k is good balance of quality/cost
+                inputs["resolution"] = kwargs.get("resolution", "2k")  # FHD, 2k, 4k
                 inputs["model"] = "RealESRGAN_x4plus"  # Best general quality
 
             case "video_bg_remove":
@@ -789,6 +789,24 @@ class ReplicateService:
                 inputs["prompt"] = "artistic style transfer, beautiful artwork, same person, recognizable face, high quality masterpiece, detailed artistic rendering"
                 # Prevent bad outputs
                 inputs["negative_prompt"] = "deformed face, wrong face, different person, blurry, ugly, bad anatomy, extra limbs"
+
+            case "time_machine":
+                # bytedance/flux-pulid - Age transformation with face preservation
+                # This model excels at generating the same person at different ages
+                inputs["main_face_image"] = image_url
+                base_prompt = prompt or config.get("default_prompt", "professional portrait photo")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                inputs["negative_prompt"] = "ugly, blurry, low quality, deformed, disfigured, bad anatomy, wrong face, different person"
+                # Face preservation params from config
+                inputs["id_weight"] = config.get("id_weight", 1.2)  # Strong face similarity
+                inputs["start_step"] = config.get("start_step", 1)  # Balance fidelity/editability
+                inputs["num_steps"] = config.get("num_steps", 20)
+                inputs["guidance_scale"] = config.get("guidance_scale", 4.0)
+                # Output settings
+                inputs["width"] = 1024
+                inputs["height"] = 1024
+                inputs["output_format"] = "jpg"
+                inputs["output_quality"] = 90
 
         return inputs
 

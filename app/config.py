@@ -379,6 +379,20 @@ AI_MODELS = {
     # ─────────────────────────────────────────────────────────────────────
     # CREATIVE TOOLS
     # ─────────────────────────────────────────────────────────────────────
+    "time_machine": {
+        "model": "bytedance/flux-pulid",
+        "version": "8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b",
+        "category": "magic_edit",
+        "description": "See yourself at different ages - past or future",
+        "cost_per_run": 0.02,
+        "supports": ["image", "prompt"],
+        "default_prompt": "professional portrait photo, high quality, detailed face",
+        # Optimal params for face preservation
+        "id_weight": 1.2,  # Strong face preservation (0-3, higher = more similar)
+        "start_step": 1,   # Balance between fidelity and editability (0-4)
+        "num_steps": 20,   # Quality steps
+        "guidance_scale": 4.0,  # Text prompt influence
+    },
     "style_transfer": {
         "model": "fofr/style-transfer",
         "version": "f1023890703bc0a5a3a2c21b5e498833be5f6ef6e70e9daf6b9b3a4fd8309cf0",
@@ -407,6 +421,7 @@ TOOL_CATEGORIES = {
     "MAGIC_EDIT": [
         "magic_eraser", "ai_headshot", "clothes_swap", "bg_remix",
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
-        "product_shoot", "text_effects", "tattoo_tryon", "style_transfer"
+        "product_shoot", "text_effects", "tattoo_tryon", "style_transfer",
+        "time_machine"
     ]
 }
