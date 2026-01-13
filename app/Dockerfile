@@ -5,8 +5,8 @@
 
 FROM python:3.11-slim
 
-# Set working directory
-WORKDIR /app
+# Set working directory (parent of app package)
+WORKDIR /srv
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -29,10 +29,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ============================================
-# Copy source code LAST
+# Copy source code into 'app' package directory
 # Only this layer rebuilds when code changes
 # ============================================
-COPY . .
+COPY . ./app/
 
 # Expose port
 EXPOSE 8000
@@ -41,5 +41,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:8000/health')" || exit 1
 
-# Run the application
+# Run the application (app.main:app = app package, main module, app instance)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
