@@ -710,11 +710,16 @@ class ReplicateService:
                 style_url = kwargs.get("style_url")
                 if not style_url:
                     raise ValueError("Style Transfer requires a style reference image")
-                inputs["structure_image"] = image_url  # Content image (structure)
-                inputs["style_image"] = style_url  # Style reference image
-                inputs["prompt"] = "Apply the artistic style"
-                inputs["structure_denoising_strength"] = 0.65  # Preserve original structure
+                inputs["image"] = image_url  # Content image (user's photo)
+                inputs["style_image"] = style_url  # Style reference image (preset or custom)
+                # Prompt to preserve details
+                inputs["prompt"] = "high quality, masterpiece, detailed texture, keep facial features unchanged, keep original clothes"
+                # Lower denoising = better preservation of original details (0.55 is ideal)
+                inputs["structure_denoising_strength"] = 0.55
+                # Depth strength at max to preserve structure/skeleton
                 inputs["structure_depth_strength"] = 1.0
+                # Negative prompt to prevent unwanted changes
+                inputs["negative_prompt"] = "ugly, deformed, distorted face, extra hair, changing clothes, nudity, blurry, low quality"
 
         return inputs
 
