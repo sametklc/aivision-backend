@@ -392,7 +392,7 @@ AI_MODELS = {
         "guidance_scale": 7.5,  # HIGH: Follow prompt keywords like "wrinkled", "young"
         "id_weight": 0.8,       # REDUCED: Allow aging/style changes
         "start_step": 2,        # Later start = more editability
-        "num_steps": 28,        # More steps for detail at high guidance
+        "num_steps": 20,        # Max allowed by model
     },
     "style_transfer": {
         "model": "fofr/style-transfer",

@@ -800,7 +800,7 @@ class ReplicateService:
                 inputs["negative_prompt"] = "ugly, blurry, low quality, deformed, disfigured, bad anatomy"
                 # TUNED PARAMS for transformation effects:
                 inputs["guidance_scale"] = 7.5  # HIGH: Forces model to follow prompt (aging keywords)
-                inputs["num_steps"] = 28        # More steps for better detail at high guidance
+                inputs["num_steps"] = 20        # Max allowed by model
                 inputs["id_weight"] = 0.8       # REDUCED: Allow more facial changes
                 inputs["start_step"] = 2        # Later start = more editability
                 # Output settings - portrait aspect ratio
