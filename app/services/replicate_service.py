@@ -336,10 +336,15 @@ class ReplicateService:
                 inputs["fps"] = 24
 
             case "script_to_video":
-                # minimax/video-01 for longer scripts
+                # minimax/video-01 - cinematic text-to-video
                 base_prompt = prompt or config.get("default_prompt", "cinematic video")
-                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
-                inputs["prompt_optimizer"] = False
+                # Apply style and add aspect ratio hint to prompt
+                styled_prompt = apply_style_to_prompt(base_prompt, style)
+                aspect_ratio = kwargs.get("aspect_ratio", "9:16")
+                # Add cinematic quality modifiers
+                final_prompt = f"{styled_prompt}, {aspect_ratio} aspect ratio, high quality, cinematic, professional"
+                inputs["prompt"] = final_prompt
+                inputs["prompt_optimizer"] = True  # Let minimax enhance the prompt
 
             case "talking_head":
                 # lucataco/sadtalker - talking face animation

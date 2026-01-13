@@ -170,7 +170,7 @@ AI_MODELS = {
     },
     "face_swap_video": {
         "model": "arabyai-replicate/roop_face_swap",
-        "version": None,  # Use latest version
+        "version": "11b6bf0f4e14d808f655e87e5448233cceff10a45f659d71539cafb7163b2e84",
         "category": "video",
         "description": "Swap faces in videos (Roop)",
         "cost_per_run": 0.12,
@@ -178,11 +178,11 @@ AI_MODELS = {
     },
     "script_to_video": {
         "model": "minimax/video-01",
-        "version": None,
+        "version": "76dd2c070e676b7e61c569f6979603233177659a888806259441147a4073356e",
         "category": "video",
-        "description": "Turn scripts into videos",
+        "description": "Turn scripts into videos with cinematic quality",
         "cost_per_run": 0.50,
-        "supports": ["prompt"],
+        "supports": ["prompt", "aspect_ratio"],
     },
 
     # ══════════════════════════════════════════════════════════════════════════
