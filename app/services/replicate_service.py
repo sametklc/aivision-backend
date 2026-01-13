@@ -706,17 +706,21 @@ class ReplicateService:
                 inputs["scale"] = 9
 
             case "style_transfer":
-                # cjwbw/neural-style-transfer - Classic non-generative style transfer
-                # This model preserves the user's face/content while applying artistic style
+                # fofr/style-transfer - Diffusion-based style transfer with optimized params
+                # Key: Low denoising + high depth = preserve face while applying style
                 style_url = kwargs.get("style_url")
                 if not style_url:
                     raise ValueError("Style Transfer requires a style reference image")
-                inputs["content_image"] = image_url  # User's photo to preserve
-                inputs["style_image"] = style_url    # Style reference image
-                # Classic neural style transfer parameters
-                inputs["iteration_count"] = config.get("iteration_count", 4)  # Sweet spot: 3-4
-                inputs["style_weight"] = config.get("style_weight", 100)      # Style visibility
-                inputs["content_weight"] = config.get("content_weight", 10)   # Face preservation
+                inputs["image"] = image_url   # User's photo (content)
+                inputs["style"] = style_url   # Style reference image
+                # CRITICAL: Low denoising preserves face (0.5 = face visible, style applied)
+                inputs["structure_denoising_strength"] = config.get("structure_denoising_strength", 0.5)
+                # Max depth preservation for skeleton/structure
+                inputs["structure_depth_strength"] = config.get("structure_depth_strength", 1.2)
+                # Smart prompt to guide preservation
+                inputs["prompt"] = "high quality, masterpiece, maintain facial features, keep original structure, clear face"
+                # Prevent hallucination
+                inputs["negative_prompt"] = "deformed, distorted face, extra fingers, blurry, ugly, bad anatomy, changing gender, changing clothes"
 
         return inputs
 

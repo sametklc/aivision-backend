@@ -378,15 +378,15 @@ AI_MODELS = {
     # CREATIVE TOOLS
     # ─────────────────────────────────────────────────────────────────────
     "style_transfer": {
-        "model": "cjwbw/neural-style-transfer",
-        "version": "5c4146036109315d9a9446d333066444da73117565c58971037303f8a096c469",
+        "model": "fofr/style-transfer",
+        "version": None,  # Use latest
         "category": "magic_edit",
         "description": "Apply artistic styles to photos",
         "cost_per_run": 0.01,
         "supports": ["image", "style"],
-        "iteration_count": 4,  # Sweet spot: 3-4. Too high = artifacts, too low = blurry
-        "style_weight": 100,   # Make style visible
-        "content_weight": 10,  # Preserve face structure
+        # Optimized params for face preservation
+        "structure_denoising_strength": 0.5,  # Lower = better face preservation (0.5 ideal)
+        "structure_depth_strength": 1.2,       # Max depth preservation for skeleton
     },
 }
 
