@@ -1,0 +1,40 @@
+# ============================================
+# Render Blueprint - AIVision Backend
+# Using Docker for fast layer-cached builds
+# ============================================
+
+services:
+  - type: web
+    name: aivision-api
+    runtime: docker
+    plan: starter
+
+    # Docker config
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+
+    # Environment Variables
+    envVars:
+      - key: REPLICATE_API_TOKEN
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: PORT
+        value: "8000"
+
+    # Health Check
+    healthCheckPath: /health
+
+    # Auto-deploy on push
+    autoDeploy: true
+
+    # Region
+    region: frankfurt

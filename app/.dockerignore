@@ -1,0 +1,77 @@
+# ============================================
+# Docker Ignore - Exclude from build context
+# Speeds up docker build significantly
+# ============================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+.env
+.env.local
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+
+# Media files (test files, not needed in container)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+
+# Documentation
+*.md
+LICENSE
+docs/
+
+# Testing
+tests/
+test/
+pytest_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Render/Deploy configs (not needed inside container)
+render.yaml
+Dockerfile
+.dockerignore
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
