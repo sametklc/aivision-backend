@@ -104,6 +104,18 @@ AI_MODELS = {
         "cost_per_run": 0.05,
         "supports": ["image", "prompt", "duration"],
     },
+    "kling_video": {
+        "model": "kwaivgi/kling-v1.6-pro",
+        "version": None,  # Use latest
+        "category": "video",
+        "description": "High-quality video generation with Kling 1.6 Pro",
+        "cost_per_run": 0.35,
+        "supports": ["image", "prompt", "duration"],
+        # Kling params
+        "duration": 5,  # 5 or 10 seconds
+        "cfg_scale": 0.5,  # 0-1, higher = more prompt adherence
+        "aspect_ratio": "9:16",
+    },
     "text_to_video": {
         "model": "bytedance/seedance-1-lite",
         "version": None,
@@ -422,7 +434,7 @@ AI_MODELS = {
 # Tool categories for frontend - All 33 Tools + 1 new
 TOOL_CATEGORIES = {
     "VIDEO_AI": [
-        "ai_hug", "image_to_video", "text_to_video", "talking_head",
+        "ai_hug", "image_to_video", "kling_video", "text_to_video", "talking_head",
         "video_expand", "style_transfer_video", "super_slowmo",
         "video_upscale", "video_bg_remove", "face_swap_video", "script_to_video"
     ],

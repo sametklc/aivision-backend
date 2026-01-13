@@ -518,6 +518,22 @@ class ReplicateService:
                 inputs["swap_image"] = source_face
                 inputs["target_video"] = target_video
 
+            case "kling_video":
+                # kwaivgi/kling-v1.6-pro - High-quality image-to-video
+                # Used for Horror & Fantasy, AI Style Morph, etc.
+                if not image_url:
+                    raise ValueError("Kling Video requires a source image")
+                inputs["start_image"] = image_url  # Kling uses start_image
+                inputs["prompt"] = prompt or config.get("default_prompt", "cinematic video, high quality")
+                inputs["negative_prompt"] = kwargs.get("negative_prompt", "blurry, low quality, distorted, glitch")
+                # Duration: 5 or 10 seconds
+                duration = kwargs.get("duration", config.get("duration", 5))
+                inputs["duration"] = 5 if duration <= 5 else 10
+                # cfg_scale: 0-1, higher = more prompt adherence
+                inputs["cfg_scale"] = config.get("cfg_scale", 0.5)
+                # Aspect ratio: 16:9, 9:16, 1:1
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "9:16"))
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
