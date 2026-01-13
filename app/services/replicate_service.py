@@ -384,7 +384,18 @@ class ReplicateService:
 
             case "video_bg_remove":
                 # arielreplicate/robust_video_matting (verified hash)
-                inputs["input_video"] = kwargs.get("video_url")
+                video_url = kwargs.get("video_url")
+                if not video_url:
+                    raise ValueError("Video BG Remove requires a video input")
+                inputs["input_video"] = video_url
+                # Output format: green_screen or transparent
+                output_format = kwargs.get("output_format", "green_screen")
+                if output_format == "green_screen":
+                    # Green background for mobile editors
+                    inputs["background_color"] = "green"
+                else:
+                    # Transparent/alpha channel (WebM with alpha)
+                    inputs["background_color"] = "transparent"
 
             case "face_swap_video":
                 # yan-ops/face-swap (verified hash)
