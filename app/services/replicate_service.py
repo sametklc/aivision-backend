@@ -166,12 +166,13 @@ class ReplicateService:
         """
         Process video expansion with stitching:
         1. Download input video
-        2. Extract last frame using FFmpeg
-        3. Call Replicate model with last frame
-        4. Download generated video
-        5. Stitch videos together (fast, no re-encoding)
-        6. Upload to Firebase Storage
-        7. Return Firebase URL
+        2. Normalize input video to match output format (480p, 16fps, h264)
+        3. Extract last frame using FFmpeg
+        4. Call Replicate model with last frame
+        5. Download generated video
+        6. Stitch normalized videos together
+        7. Upload to Firebase Storage
+        8. Return Firebase URL
         """
         from .firebase_storage_service import firebase_storage_service
         import base64
@@ -181,13 +182,14 @@ class ReplicateService:
         try:
             # Create temp directory for processing
             temp_dir = tempfile.mkdtemp(prefix="video_expand_")
-            input_video_path = os.path.join(temp_dir, "input.mp4")
+            input_video_path = os.path.join(temp_dir, "input_original.mp4")
+            normalized_input_path = os.path.join(temp_dir, "input_normalized.mp4")
             last_frame_path = os.path.join(temp_dir, "last_frame.jpg")
             gen_video_path = os.path.join(temp_dir, "generated.mp4")
             output_video_path = os.path.join(temp_dir, "output.mp4")
 
             # Step 1: Download input video
-            logger.info(f"[VIDEO_EXPAND] Downloading input video...")
+            logger.info(f"[VIDEO_EXPAND] Step 1: Downloading input video from {video_url[:50]}...")
             async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.get(video_url)
                 response.raise_for_status()
@@ -195,12 +197,40 @@ class ReplicateService:
                     f.write(response.content)
             logger.info(f"[VIDEO_EXPAND] Input video downloaded: {len(response.content)} bytes")
 
-            # Step 2: Extract last frame using FFmpeg
-            logger.info(f"[VIDEO_EXPAND] Extracting last frame...")
+            # Step 2: Normalize input video to 480p, 16fps, h264 (same as Replicate output)
+            logger.info(f"[VIDEO_EXPAND] Step 2: Normalizing input video to 480p 16fps...")
+            normalize_cmd = [
+                "ffmpeg", "-y",
+                "-i", input_video_path,
+                "-vf", "scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2",
+                "-r", "16",  # 16 fps to match Replicate output
+                "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23",
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-ar", "44100",
+                "-ac", "2",
+                normalized_input_path
+            ]
+            norm_result = await asyncio.to_thread(
+                subprocess.run, normalize_cmd,
+                capture_output=True, text=True,
+                timeout=60
+            )
+            if norm_result.returncode != 0:
+                logger.error(f"[VIDEO_EXPAND] Normalize error: {norm_result.stderr}")
+                # Use original if normalization fails
+                normalized_input_path = input_video_path
+            else:
+                logger.info(f"[VIDEO_EXPAND] Input video normalized successfully")
+
+            # Step 3: Extract last frame using FFmpeg
+            logger.info(f"[VIDEO_EXPAND] Step 3: Extracting last frame...")
             extract_cmd = [
                 "ffmpeg", "-y",
                 "-sseof", "-0.1",
-                "-i", input_video_path,
+                "-i", normalized_input_path,
                 "-vframes", "1",
                 "-q:v", "2",
                 last_frame_path
@@ -215,17 +245,20 @@ class ReplicateService:
                 return False, f"Failed to extract last frame: {result.stderr}"
             logger.info(f"[VIDEO_EXPAND] Last frame extracted")
 
-            # Step 3: Convert last frame to base64 data URI
+            # Step 4: Convert last frame to base64 data URI
             with open(last_frame_path, "rb") as f:
                 frame_data = f.read()
             frame_base64 = base64.b64encode(frame_data).decode("utf-8")
             frame_data_uri = f"data:image/jpeg;base64,{frame_base64}"
 
-            # Step 4: Call Replicate model with last frame
-            logger.info(f"[VIDEO_EXPAND] Generating continuation with AI...")
+            # Build the prompt - note: wan-video is image-to-video, prompt affects motion style
+            final_prompt = prompt or config.get("default_prompt", "Continue the motion smoothly, high quality")
+            logger.info(f"[VIDEO_EXPAND] Step 4: Generating with prompt: '{final_prompt}'")
+
+            # Step 5: Call Replicate model with last frame
             inputs = {
                 "image": frame_data_uri,
-                "prompt": prompt or config.get("default_prompt", "Continue the motion smoothly, high quality"),
+                "prompt": final_prompt,
                 "num_frames": 81,
                 "resolution": "480p",
                 "frames_per_second": 16,
@@ -246,8 +279,8 @@ class ReplicateService:
                 return False, "No video URL in generation result"
             logger.info(f"[VIDEO_EXPAND] Generated video URL: {gen_video_url}")
 
-            # Step 5: Download generated video
-            logger.info(f"[VIDEO_EXPAND] Downloading generated video...")
+            # Step 6: Download generated video
+            logger.info(f"[VIDEO_EXPAND] Step 5: Downloading generated video...")
             async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.get(gen_video_url)
                 response.raise_for_status()
@@ -255,39 +288,44 @@ class ReplicateService:
                     f.write(response.content)
             logger.info(f"[VIDEO_EXPAND] Generated video downloaded: {len(response.content)} bytes")
 
-            # Step 6: Stitch videos together (fast concat with re-encoding for compatibility)
-            logger.info(f"[VIDEO_EXPAND] Stitching videos...")
-            concat_file = os.path.join(temp_dir, "concat.txt")
-            with open(concat_file, "w") as f:
-                f.write(f"file '{input_video_path}'\n")
-                f.write(f"file '{gen_video_path}'\n")
+            # Step 7: Stitch videos using filter_complex for better compatibility
+            logger.info(f"[VIDEO_EXPAND] Step 6: Stitching videos with filter_complex...")
 
+            # Use filter_complex concat for better compatibility
             stitch_cmd = [
                 "ffmpeg", "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file,
+                "-i", normalized_input_path,
+                "-i", gen_video_path,
+                "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[outv]",
+                "-map", "[outv]",
                 "-c:v", "libx264",
-                "-preset", "ultrafast",  # Fast encoding
-                "-crf", "28",  # Lower quality for speed
-                "-c:a", "aac",
-                "-b:a", "128k",
+                "-preset", "fast",
+                "-crf", "23",
                 "-movflags", "+faststart",
                 output_video_path
             ]
+
             stitch_result = await asyncio.to_thread(
                 subprocess.run, stitch_cmd,
                 capture_output=True, text=True,
-                timeout=120  # 2 minute timeout for stitching
+                timeout=180  # 3 minute timeout for stitching
             )
-            if stitch_result.returncode != 0:
-                logger.error(f"FFmpeg stitch error: {stitch_result.stderr}")
-                # Fallback: return just the generated video
-                return True, {"url": gen_video_url}
-            logger.info(f"[VIDEO_EXPAND] Videos stitched successfully")
 
-            # Step 7: Upload to Firebase Storage
-            logger.info(f"[VIDEO_EXPAND] Uploading to Firebase Storage...")
+            if stitch_result.returncode != 0:
+                logger.error(f"[VIDEO_EXPAND] FFmpeg stitch error: {stitch_result.stderr}")
+                logger.warning(f"[VIDEO_EXPAND] Fallback: returning only generated video")
+                return True, {"url": gen_video_url}
+
+            # Check output file exists and has content
+            if not os.path.exists(output_video_path):
+                logger.error(f"[VIDEO_EXPAND] Output file not created!")
+                return True, {"url": gen_video_url}
+
+            output_size = os.path.getsize(output_video_path)
+            logger.info(f"[VIDEO_EXPAND] Videos stitched successfully! Output size: {output_size} bytes")
+
+            # Step 8: Upload to Firebase Storage
+            logger.info(f"[VIDEO_EXPAND] Step 7: Uploading to Firebase Storage...")
             with open(output_video_path, "rb") as f:
                 video_data = f.read()
 
@@ -296,10 +334,11 @@ class ReplicateService:
                 folder="video_expand"
             )
             if not upload_success:
-                logger.warning(f"Firebase upload failed: {upload_error}, returning generated video URL")
+                logger.warning(f"[VIDEO_EXPAND] Firebase upload failed: {upload_error}")
+                logger.warning(f"[VIDEO_EXPAND] Fallback: returning only generated video")
                 return True, {"url": gen_video_url}
 
-            logger.info(f"[VIDEO_EXPAND] Complete! Final video: {upload_url}")
+            logger.info(f"[VIDEO_EXPAND] Complete! Final stitched video: {upload_url}")
             return True, {"url": upload_url}
 
         except subprocess.TimeoutExpired:
@@ -310,6 +349,8 @@ class ReplicateService:
             return False, f"Download failed: {str(e)}"
         except Exception as e:
             logger.error(f"[VIDEO_EXPAND] Error: {e}")
+            import traceback
+            logger.error(f"[VIDEO_EXPAND] Traceback: {traceback.format_exc()}")
             return False, str(e)
         finally:
             # Cleanup temp files
