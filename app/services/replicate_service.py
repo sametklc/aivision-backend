@@ -366,15 +366,20 @@ class ReplicateService:
                 inputs["guidance_scale"] = 7.5
 
             case "super_slowmo":
-                # zsxkib/rife-video-interpolation - RIFE frame interpolation
-                # Creates smooth slow motion by interpolating frames
+                # zsxkib/st-mfnet - ST-MFNet frame interpolation (GAN-based)
+                # Supports up to 32x interpolation with better texture preservation
                 video_url = kwargs.get("video_url")
                 if not video_url:
                     raise ValueError("Super Slow-Mo requires a video input")
-                inputs["video"] = video_url
-                # multiplier: 2 = 2x slower, 4 = 4x slower (cinematic), 8 = 8x slower (extreme)
+                inputs["mp4"] = video_url
+                # framerate_multiplier: 2, 4, 8, 16, 32
                 speed_factor = int(kwargs.get("speed_factor", kwargs.get("times_to_interpolate", 4)))
-                inputs["multiplier"] = speed_factor
+                inputs["framerate_multiplier"] = speed_factor
+                # CRITICAL: keep_original_duration=False for actual slow motion
+                # If True: just smoother video at higher fps (real-time)
+                # If False: time is stretched = true slow motion effect
+                inputs["keep_original_duration"] = False
+                inputs["custom_fps"] = 30  # Output plays at normal 30fps
 
             case "video_upscale":
                 # lucataco/real-esrgan-video (verified hash)

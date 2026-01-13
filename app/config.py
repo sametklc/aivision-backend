@@ -145,10 +145,10 @@ AI_MODELS = {
         "supports": ["video", "style", "prompt"],
     },
     "super_slowmo": {
-        "model": "zsxkib/rife-video-interpolation",
-        "version": None,  # Use latest version
+        "model": "zsxkib/st-mfnet",
+        "version": "faa7693430b0a4ac95d1b8e25165673c1d7a7263537a7c4bb9be82a3e2d130fb",
         "category": "video",
-        "description": "Create cinematic slow motion",
+        "description": "Create cinematic slow motion with ST-MFNet (up to 32x)",
         "cost_per_run": 0.08,
         "supports": ["video"],
     },
