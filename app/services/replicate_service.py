@@ -221,7 +221,10 @@ class ReplicateService:
             logger.info(f"[VIDEO_EXPAND] Frame converted to base64 ({len(frame_data)} bytes)")
 
             # Step 4: Build prompt for Kling v2.5
-            final_prompt = prompt or config.get("default_prompt", "Continue the video smoothly with cinematic motion")
+            # IMPORTANT: No restrictive phrases! Let the model be creative.
+            # Only add quality boosters, never "preserve original", "maintain consistency", etc.
+            user_prompt = prompt.strip() if prompt else "continue the scene with smooth motion"
+            final_prompt = f"{user_prompt}, high quality, cinematic, 4k, detailed"
             logger.info(f"[VIDEO_EXPAND] Step 3: Calling Kling v2.5 with prompt: '{final_prompt[:100]}...'")
 
             # Step 5: Call Kling v2.5 with last frame as start_image
