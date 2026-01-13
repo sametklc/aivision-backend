@@ -252,9 +252,13 @@ class ReplicateService:
 
             logger.info(f"[VIDEO_EXPAND] SUCCESS! Generated video: {gen_video_url}")
 
-            # Return the generated continuation video directly
-            # Note: No stitching to avoid Render free tier memory issues
-            return True, {"url": gen_video_url}
+            # Return both URLs - Flutter will stitch them client-side
+            return True, {
+                "url": gen_video_url,  # Main result (continuation)
+                "original_url": video_url,  # Original video for stitching
+                "continuation_url": gen_video_url,  # Generated continuation
+                "stitch_on_client": True  # Flag for Flutter to stitch
+            }
 
         except subprocess.TimeoutExpired:
             logger.error(f"[VIDEO_EXPAND] FFmpeg timeout")

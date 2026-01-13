@@ -154,6 +154,16 @@ async def get_job_status(job_id: str):
             if result_str and isinstance(result_str, str) and result_str.startswith("http"):
                 result_url = result_str
 
+    # Build metadata with tool_id and any extra result data
+    metadata = {"tool_id": job["tool_id"]}
+
+    # Add extra fields from result for video stitching on client
+    if job["result"] and isinstance(job["result"], dict):
+        if job["result"].get("stitch_on_client"):
+            metadata["stitch_on_client"] = True
+            metadata["original_url"] = job["result"].get("original_url")
+            metadata["continuation_url"] = job["result"].get("continuation_url")
+
     return JobStatusResponse(
         job_id=job_id,
         status=job["status"],
@@ -162,7 +172,7 @@ async def get_job_status(job_id: str):
         error=job.get("error"),
         created_at=job["created_at"],
         completed_at=job.get("completed_at"),
-        metadata={"tool_id": job["tool_id"]},
+        metadata=metadata,
     )
 
 

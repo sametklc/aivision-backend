@@ -381,7 +381,7 @@ AI_MODELS = {
     # ─────────────────────────────────────────────────────────────────────
     "style_transfer": {
         "model": "fofr/style-transfer",
-        "version": None,  # Use latest
+        "version": "f1023890703bc0a5a3a2c21b5e498833be5f6ef6e70e9daf6b9b3a4fd8309cf0",
         "category": "magic_edit",
         "description": "Apply artistic styles to photos",
         "cost_per_run": 0.01,
