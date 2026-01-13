@@ -809,21 +809,20 @@ class ReplicateService:
                 inputs["output_format"] = "png"
 
             case "retro_style":
-                # zsxkib/instant-id - Retro & Polaroid aesthetic transformations
-                # Uses InstantID for face-preserving style transfer
-                inputs["image"] = image_url
+                # tencentarc/photomaker - Retro & Polaroid aesthetic transformations
+                # Same model as ai_headshot but tuned for stronger style effects
+                inputs["input_image"] = image_url  # PhotoMaker uses input_image
                 base_prompt = prompt or config.get("default_prompt", "vintage polaroid photo, retro aesthetic")
-                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
-                inputs["negative_prompt"] = "ugly, blurry, low quality, deformed, modern, digital, sharp, clean"
-                # InstantID params - balanced for style transformation
-                inputs["ip_adapter_scale"] = config.get("ip_adapter_scale", 0.6)  # Face similarity
-                inputs["controlnet_conditioning_scale"] = config.get("controlnet_conditioning_scale", 0.6)
-                inputs["guidance_scale"] = config.get("guidance_scale", 7.0)
-                inputs["num_inference_steps"] = config.get("num_inference_steps", 30)
-                # Output settings
-                inputs["output_format"] = "png"
-                inputs["output_quality"] = 95
-                inputs["enhance_nonface_region"] = True
+                # PhotoMaker requires "img" trigger word at the end
+                styled_prompt = apply_style_to_prompt(base_prompt, style)
+                if not styled_prompt.strip().endswith("img"):
+                    styled_prompt = f"{styled_prompt} img"
+                inputs["prompt"] = styled_prompt
+                inputs["negative_prompt"] = "clean, digital, 3d render, cartoon, illustration, low quality, bad anatomy, distorted face, modern, sharp"
+                # PhotoMaker params - tuned for STRONG retro effects
+                inputs["style_strength_ratio"] = config.get("style_strength_ratio", 40)  # HIGH for retro
+                inputs["num_steps"] = config.get("num_steps", 40)
+                inputs["guidance_scale"] = config.get("guidance_scale", 5.0)
 
         return inputs
 

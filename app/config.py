@@ -394,18 +394,17 @@ AI_MODELS = {
         "num_steps": 20,
     },
     "retro_style": {
-        "model": "zsxkib/instant-id",
-        "version": "2e4785a4d80dadf580077b2244c8d7c05d8e3faac04a04c02d8e099dd2876789",
+        "model": "tencentarc/photomaker",
+        "version": "ddfc2b08d209f9fa8c1eca692712918bd449f695dabb4a958da31802a9570fe4",
         "category": "magic_edit",
         "description": "Retro & Polaroid aesthetic transformations",
-        "cost_per_run": 0.02,
+        "cost_per_run": 0.015,
         "supports": ["image", "prompt"],
-        "default_prompt": "vintage polaroid photo, retro aesthetic, film grain, warm faded colors",
-        # InstantID params - balanced for style transformation
-        "ip_adapter_scale": 0.6,  # Lower = more style flexibility
-        "controlnet_conditioning_scale": 0.6,  # Lower = allow more changes
-        "guidance_scale": 7.0,  # Follow prompt well
-        "num_inference_steps": 30,
+        "default_prompt": "vintage polaroid photo, retro aesthetic, film grain, warm faded colors img",
+        # PhotoMaker params - tuned for strong retro effects
+        "style_strength_ratio": 40,  # HIGH: Strong retro style over original
+        "num_steps": 40,  # Better quality
+        "guidance_scale": 5.0,
     },
     "style_transfer": {
         "model": "fofr/style-transfer",
