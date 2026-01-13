@@ -145,11 +145,11 @@ AI_MODELS = {
         "supports": ["video", "style", "prompt"],
     },
     "super_slowmo": {
-        "model": "google-research/frame-interpolation",
-        "version": "4f88a16a13673a8b589c18866e540556170a5bcb2ccdc12de556e800e9456d3d",
+        "model": "pollinations/rife-video-interpolation",
+        "version": None,  # Use latest version
         "category": "video",
         "description": "Create cinematic slow motion",
-        "cost_per_run": 0.05,
+        "cost_per_run": 0.08,
         "supports": ["video"],
     },
     "video_upscale": {

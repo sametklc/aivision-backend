@@ -366,10 +366,16 @@ class ReplicateService:
                 inputs["guidance_scale"] = 7.5
 
             case "super_slowmo":
-                # google-research/frame-interpolation (verified hash)
-                inputs["frame1"] = kwargs.get("frame1_url")
-                inputs["frame2"] = kwargs.get("frame2_url")
-                inputs["times_to_interpolate"] = kwargs.get("times", 2)
+                # Video slow motion using frame interpolation
+                # Accepts video input and speed_factor (2, 4, or 8)
+                video_url = kwargs.get("video_url")
+                if not video_url:
+                    raise ValueError("Super Slow-Mo requires a video input")
+                inputs["video"] = video_url
+                # speed_factor: 2 = 2x slower, 4 = 4x slower (cinematic), 8 = 8x slower (extreme)
+                speed_factor = int(kwargs.get("speed_factor", kwargs.get("times_to_interpolate", 4)))
+                inputs["interpolation_factor"] = speed_factor
+                inputs["fps_output"] = 30  # Output at 30fps for smooth playback
 
             case "video_upscale":
                 # lucataco/real-esrgan-video (verified hash)
