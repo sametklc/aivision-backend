@@ -170,10 +170,10 @@ class ReplicateService:
         3. Call Replicate model with last frame
         4. Download generated video
         5. Stitch videos together (fast, no re-encoding)
-        6. Upload to Cloudinary
-        7. Return Cloudinary URL
+        6. Upload to Firebase Storage
+        7. Return Firebase URL
         """
-        from .cloudinary_service import cloudinary_service
+        from .firebase_storage_service import firebase_storage_service
         import base64
         import shutil
 
@@ -286,14 +286,17 @@ class ReplicateService:
                 return True, {"url": gen_video_url}
             logger.info(f"[VIDEO_EXPAND] Videos stitched successfully")
 
-            # Step 7: Upload to Cloudinary
-            logger.info(f"[VIDEO_EXPAND] Uploading to Cloudinary...")
+            # Step 7: Upload to Firebase Storage
+            logger.info(f"[VIDEO_EXPAND] Uploading to Firebase Storage...")
             with open(output_video_path, "rb") as f:
                 video_data = f.read()
 
-            upload_success, upload_url, upload_error = await cloudinary_service.upload_video(video_data)
+            upload_success, upload_url, upload_error = await firebase_storage_service.upload_video(
+                video_data,
+                folder="video_expand"
+            )
             if not upload_success:
-                logger.warning(f"Cloudinary upload failed: {upload_error}, returning generated video URL")
+                logger.warning(f"Firebase upload failed: {upload_error}, returning generated video URL")
                 return True, {"url": gen_video_url}
 
             logger.info(f"[VIDEO_EXPAND] Complete! Final video: {upload_url}")
@@ -802,7 +805,7 @@ class ReplicateService:
             model_path = model_config["model"]
             version = model_config.get("version")
 
-            # Create prediction - use version if available, otherwise model
+            # Create prediction - use version if available, otherwise get latest version
             if version:
                 prediction = await asyncio.to_thread(
                     self.client.predictions.create,
@@ -810,11 +813,34 @@ class ReplicateService:
                     input=safe_inputs
                 )
             else:
-                prediction = await asyncio.to_thread(
-                    self.client.predictions.create,
-                    model=model_path,
-                    input=safe_inputs
-                )
+                # Get the latest version of the model first
+                try:
+                    model = await asyncio.to_thread(
+                        self.client.models.get,
+                        model_path
+                    )
+                    latest_version = model.latest_version
+                    if latest_version:
+                        logger.info(f"[ASYNC] Using latest version: {latest_version.id}")
+                        prediction = await asyncio.to_thread(
+                            self.client.predictions.create,
+                            version=latest_version.id,
+                            input=safe_inputs
+                        )
+                    else:
+                        # Fallback to model parameter
+                        prediction = await asyncio.to_thread(
+                            self.client.predictions.create,
+                            model=model_path,
+                            input=safe_inputs
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to get latest version, trying model param: {e}")
+                    prediction = await asyncio.to_thread(
+                        self.client.predictions.create,
+                        model=model_path,
+                        input=safe_inputs
+                    )
 
             return True, prediction.id, None
 

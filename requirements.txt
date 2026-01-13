@@ -20,6 +20,7 @@ Pillow==11.1.0
 
 # Cloud Storage (for image uploads)
 cloudinary==1.42.0
+firebase-admin==6.4.0
 
 # Security
 python-jose[cryptography]==3.3.0
