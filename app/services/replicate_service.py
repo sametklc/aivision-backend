@@ -805,8 +805,7 @@ class ReplicateService:
                 # Output settings
                 inputs["width"] = 1024
                 inputs["height"] = 1024
-                inputs["output_format"] = "jpg"
-                inputs["output_quality"] = 90
+                inputs["output_format"] = "png"
 
         return inputs
 
