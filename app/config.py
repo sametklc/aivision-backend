@@ -178,7 +178,7 @@ AI_MODELS = {
     },
     "script_to_video": {
         "model": "minimax/video-01",
-        "version": "76dd2c070e676b7e61c569f6979603233177659a888806259441147a4073356e",
+        "version": "5aa835260ff7f40f4069c41185f72036accf99e29957bb4a3b3a911f3b6c1912",
         "category": "video",
         "description": "Turn scripts into videos with cinematic quality",
         "cost_per_run": 0.50,
