@@ -220,21 +220,21 @@ class ReplicateService:
                 logger.warning(f"[FACE_SWAP] FFmpeg re-encode failed: {result.stderr.decode()[:200]}")
                 return None
 
-            # Upload to Cloudinary
+            # Upload to Firebase Storage
             with open(output_path, 'rb') as f:
                 processed_data = f.read()
 
-            from .cloudinary_service import cloudinary_service
-            success, new_url, error = await cloudinary_service.upload_video(
+            from .firebase_storage_service import firebase_storage_service
+            success, new_url, error = await firebase_storage_service.upload_video(
                 processed_data,
-                folder="aivision/faceswap_processed"
+                folder="faceswap_processed"
             )
 
             if success:
-                logger.info(f"[FACE_SWAP] Preprocessed video uploaded: {new_url}")
+                logger.info(f"[FACE_SWAP] Preprocessed video uploaded to Firebase: {new_url}")
                 return new_url
             else:
-                logger.warning(f"[FACE_SWAP] Cloudinary upload failed: {error}")
+                logger.warning(f"[FACE_SWAP] Firebase upload failed: {error}")
                 return None
 
         except subprocess.TimeoutExpired:
