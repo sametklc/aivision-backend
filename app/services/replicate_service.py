@@ -639,22 +639,23 @@ class ReplicateService:
                 inputs["scale"] = 9
 
             case "style_transfer":
-                # fofr/style-transfer - Diffusion-based style transfer with optimized params
-                # Key: Low denoising + high depth = preserve face while applying style
+                # fofr/style-transfer - Artistic style transfer with face preservation
                 style_url = kwargs.get("style_url")
                 if not style_url:
                     raise ValueError("Style Transfer requires a style reference image")
                 # CORRECT PARAMETER NAMES for fofr/style-transfer:
-                inputs["structure_image"] = image_url  # User's photo (to preserve structure)
-                inputs["style_image"] = style_url      # Style reference image (required)
-                # CRITICAL: Low denoising preserves face (0.5 = face visible, style applied)
-                inputs["structure_denoising_strength"] = config.get("structure_denoising_strength", 0.5)
-                # Max depth preservation for skeleton/structure
-                inputs["structure_depth_strength"] = config.get("structure_depth_strength", 1.2)
-                # Smart prompt to guide preservation
-                inputs["prompt"] = "high quality, masterpiece, maintain facial features, keep original structure, clear face"
-                # Prevent hallucination
-                inputs["negative_prompt"] = "deformed, distorted face, extra fingers, blurry, ugly, bad anatomy, changing gender, changing clothes"
+                inputs["structure_image"] = image_url  # User's photo (source face)
+                inputs["style_image"] = style_url      # Style reference (artistic style)
+                # BALANCED: 0.65 = apply style strongly while keeping face recognizable
+                inputs["structure_denoising_strength"] = config.get("structure_denoising_strength", 0.65)
+                # Preserve face structure but allow artistic interpretation
+                inputs["structure_depth_strength"] = config.get("structure_depth_strength", 0.9)
+                # Style strength - how much to apply the style image
+                inputs["style_strength"] = 0.8  # Strong style application
+                # Prompt: emphasize artistic transformation with face preservation
+                inputs["prompt"] = "artistic style transfer, beautiful artwork, same person, recognizable face, high quality masterpiece, detailed artistic rendering"
+                # Prevent bad outputs
+                inputs["negative_prompt"] = "deformed face, wrong face, different person, blurry, ugly, bad anatomy, extra limbs"
 
         return inputs
 
