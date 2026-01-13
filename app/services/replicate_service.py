@@ -483,8 +483,10 @@ class ReplicateService:
 
             case "video_upscale":
                 # lucataco/real-esrgan-video (verified hash)
-                inputs["video"] = kwargs.get("video_url")
-                inputs["scale"] = 2  # Force 2x to save cost
+                # Params: video_path, resolution (FHD/2k/4k), model
+                inputs["video_path"] = kwargs.get("video_url")
+                inputs["resolution"] = "2k"  # 2k is good balance of quality/cost
+                inputs["model"] = "RealESRGAN_x4plus"  # Best general quality
 
             case "video_bg_remove":
                 # arielreplicate/robust_video_matting (verified hash)
