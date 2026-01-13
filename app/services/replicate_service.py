@@ -366,7 +366,7 @@ class ReplicateService:
                 inputs["guidance_scale"] = 7.5
 
             case "super_slowmo":
-                # fofr/video-frame-interpolation - RIFE 4.22
+                # zsxkib/rife-video-interpolation - RIFE frame interpolation
                 # Creates smooth slow motion by interpolating frames
                 video_url = kwargs.get("video_url")
                 if not video_url:
@@ -374,7 +374,7 @@ class ReplicateService:
                 inputs["video"] = video_url
                 # multiplier: 2 = 2x slower, 4 = 4x slower (cinematic), 8 = 8x slower (extreme)
                 speed_factor = int(kwargs.get("speed_factor", kwargs.get("times_to_interpolate", 4)))
-                inputs["multiplier"] = speed_factor  # fofr model uses "multiplier"
+                inputs["multiplier"] = speed_factor
 
             case "video_upscale":
                 # lucataco/real-esrgan-video (verified hash)
@@ -397,9 +397,13 @@ class ReplicateService:
                     inputs["background_color"] = "transparent"
 
             case "face_swap_video":
-                # yan-ops/face-swap (verified hash)
-                inputs["target_image"] = kwargs.get("video_url") or image_url
-                inputs["swap_image"] = kwargs.get("face_image_url")
+                # xrunda/hello - Roop face swap implementation
+                # source = the face image (face to use)
+                # target = the video/image to swap face into
+                inputs["source"] = kwargs.get("face_image_url") or image_url  # Face source
+                inputs["target"] = kwargs.get("video_url")  # Target video
+                inputs["use_gfpgan"] = True  # Enhance face details
+                inputs["keep_fps"] = True  # Maintain original video speed
 
         return inputs
 

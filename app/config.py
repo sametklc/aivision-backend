@@ -145,8 +145,8 @@ AI_MODELS = {
         "supports": ["video", "style", "prompt"],
     },
     "super_slowmo": {
-        "model": "fofr/video-frame-interpolation",
-        "version": None,  # Use latest version - RIFE 4.22
+        "model": "zsxkib/rife-video-interpolation",
+        "version": None,  # Use latest version
         "category": "video",
         "description": "Create cinematic slow motion",
         "cost_per_run": 0.08,
@@ -169,10 +169,10 @@ AI_MODELS = {
         "supports": ["video"],
     },
     "face_swap_video": {
-        "model": "yan-ops/face-swap",
-        "version": "74e365021a8f6d744b7f8c0780211a729e8c895964f40f2f750b284852033096",
+        "model": "xrunda/hello",
+        "version": "104b4a39315349db50880757bc8c1c996c5309e3aa11286b0a3c84dab81fd440",
         "category": "video",
-        "description": "Swap faces in videos",
+        "description": "Swap faces in videos (Roop)",
         "cost_per_run": 0.12,
         "supports": ["video", "image"],
     },
