@@ -706,20 +706,17 @@ class ReplicateService:
                 inputs["scale"] = 9
 
             case "style_transfer":
-                # fofr/style-transfer - High-end artistic style transfer
+                # cjwbw/neural-style-transfer - Classic non-generative style transfer
+                # This model preserves the user's face/content while applying artistic style
                 style_url = kwargs.get("style_url")
                 if not style_url:
                     raise ValueError("Style Transfer requires a style reference image")
-                inputs["image"] = image_url  # Content image (user's photo)
-                inputs["style_image"] = style_url  # Style reference image (preset or custom)
-                # Prompt to preserve details
-                inputs["prompt"] = "high quality, masterpiece, detailed texture, keep facial features unchanged, keep original clothes"
-                # Lower denoising = better preservation of original details (0.55 is ideal)
-                inputs["structure_denoising_strength"] = 0.55
-                # Depth strength at max to preserve structure/skeleton
-                inputs["structure_depth_strength"] = 1.0
-                # Negative prompt to prevent unwanted changes
-                inputs["negative_prompt"] = "ugly, deformed, distorted face, extra hair, changing clothes, nudity, blurry, low quality"
+                inputs["content_image"] = image_url  # User's photo to preserve
+                inputs["style_image"] = style_url    # Style reference image
+                # Classic neural style transfer parameters
+                inputs["iteration_count"] = config.get("iteration_count", 4)  # Sweet spot: 3-4
+                inputs["style_weight"] = config.get("style_weight", 100)      # Style visibility
+                inputs["content_weight"] = config.get("content_weight", 10)   # Face preservation
 
         return inputs
 

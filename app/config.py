@@ -378,13 +378,15 @@ AI_MODELS = {
     # CREATIVE TOOLS
     # ─────────────────────────────────────────────────────────────────────
     "style_transfer": {
-        "model": "fofr/style-transfer",
-        "version": "f1023890703bc0a5a3a2c21b5e498833be5f6ef6e70e9daf6b9b3a4fd8309cf0",
+        "model": "cjwbw/neural-style-transfer",
+        "version": "5c4146036109315d9a9446d333066444da73117565c58971037303f8a096c469",
         "category": "magic_edit",
         "description": "Apply artistic styles to photos",
-        "cost_per_run": 0.02,
+        "cost_per_run": 0.01,
         "supports": ["image", "style"],
-        "default_scale": 5,
+        "iteration_count": 4,  # Sweet spot: 3-4. Too high = artifacts, too low = blurry
+        "style_weight": 100,   # Make style visible
+        "content_weight": 10,  # Preserve face structure
     },
 }
 
