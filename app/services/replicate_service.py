@@ -164,17 +164,15 @@ class ReplicateService:
         config: Dict[str, Any]
     ) -> Tuple[bool, Any]:
         """
-        Process video expansion with stitching:
+        Process video expansion (lightweight version for Render free tier):
         1. Download input video
-        2. Normalize input video to match output format (480p, 16fps, h264)
-        3. Extract last frame using FFmpeg
-        4. Call Replicate model with last frame
-        5. Download generated video
-        6. Stitch normalized videos together
-        7. Upload to Firebase Storage
-        8. Return Firebase URL
+        2. Extract last frame using FFmpeg
+        3. Call Kling v2.5 with last frame + prompt
+        4. Return Kling output directly (no stitching to avoid server crash)
+
+        Note: Stitching removed to prevent Render free tier memory crashes.
+        The continuation video is returned directly.
         """
-        from .firebase_storage_service import firebase_storage_service
         import base64
         import shutil
 
@@ -182,57 +180,27 @@ class ReplicateService:
         try:
             # Create temp directory for processing
             temp_dir = tempfile.mkdtemp(prefix="video_expand_")
-            input_video_path = os.path.join(temp_dir, "input_original.mp4")
-            normalized_input_path = os.path.join(temp_dir, "input_normalized.mp4")
+            input_video_path = os.path.join(temp_dir, "input.mp4")
             last_frame_path = os.path.join(temp_dir, "last_frame.jpg")
-            gen_video_path = os.path.join(temp_dir, "generated.mp4")
-            output_video_path = os.path.join(temp_dir, "output.mp4")
 
             # Step 1: Download input video
-            logger.info(f"[VIDEO_EXPAND] Step 1: Downloading input video from {video_url[:50]}...")
-            async with httpx.AsyncClient(timeout=120.0) as client:
+            logger.info(f"[VIDEO_EXPAND] Step 1: Downloading input video...")
+            async with httpx.AsyncClient(timeout=60.0) as client:
                 response = await client.get(video_url)
                 response.raise_for_status()
                 with open(input_video_path, "wb") as f:
                     f.write(response.content)
-            logger.info(f"[VIDEO_EXPAND] Input video downloaded: {len(response.content)} bytes")
+            video_size_mb = len(response.content) / (1024 * 1024)
+            logger.info(f"[VIDEO_EXPAND] Input video downloaded: {video_size_mb:.2f} MB")
 
-            # Step 2: Normalize input video to 480p, 16fps, h264 (same as Replicate output)
-            logger.info(f"[VIDEO_EXPAND] Step 2: Normalizing input video to 480p 16fps...")
-            normalize_cmd = [
-                "ffmpeg", "-y",
-                "-i", input_video_path,
-                "-vf", "scale=854:480:force_original_aspect_ratio=decrease,pad=854:480:(ow-iw)/2:(oh-ih)/2",
-                "-r", "16",  # 16 fps to match Replicate output
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "128k",
-                "-ar", "44100",
-                "-ac", "2",
-                normalized_input_path
-            ]
-            norm_result = await asyncio.to_thread(
-                subprocess.run, normalize_cmd,
-                capture_output=True, text=True,
-                timeout=60
-            )
-            if norm_result.returncode != 0:
-                logger.error(f"[VIDEO_EXPAND] Normalize error: {norm_result.stderr}")
-                # Use original if normalization fails
-                normalized_input_path = input_video_path
-            else:
-                logger.info(f"[VIDEO_EXPAND] Input video normalized successfully")
-
-            # Step 3: Extract last frame using FFmpeg
-            logger.info(f"[VIDEO_EXPAND] Step 3: Extracting last frame...")
+            # Step 2: Extract last frame using FFmpeg (lightweight operation)
+            logger.info(f"[VIDEO_EXPAND] Step 2: Extracting last frame...")
             extract_cmd = [
                 "ffmpeg", "-y",
-                "-sseof", "-0.1",
-                "-i", normalized_input_path,
+                "-sseof", "-0.1",  # Seek to 0.1 seconds before end
+                "-i", input_video_path,
                 "-vframes", "1",
-                "-q:v", "2",
+                "-q:v", "2",  # High quality JPEG
                 last_frame_path
             ]
             result = await asyncio.to_thread(
@@ -241,29 +209,29 @@ class ReplicateService:
                 timeout=30
             )
             if result.returncode != 0:
-                logger.error(f"FFmpeg extract error: {result.stderr}")
+                logger.error(f"[VIDEO_EXPAND] FFmpeg extract error: {result.stderr}")
                 return False, f"Failed to extract last frame: {result.stderr}"
-            logger.info(f"[VIDEO_EXPAND] Last frame extracted")
+            logger.info(f"[VIDEO_EXPAND] Last frame extracted successfully")
 
-            # Step 4: Convert last frame to base64 data URI
+            # Step 3: Convert last frame to base64 data URI
             with open(last_frame_path, "rb") as f:
                 frame_data = f.read()
             frame_base64 = base64.b64encode(frame_data).decode("utf-8")
             frame_data_uri = f"data:image/jpeg;base64,{frame_base64}"
+            logger.info(f"[VIDEO_EXPAND] Frame converted to base64 ({len(frame_data)} bytes)")
 
-            # Build the prompt - Kling v2.5 follows prompts well for NEW content generation
+            # Step 4: Build prompt for Kling v2.5
             final_prompt = prompt or config.get("default_prompt", "Continue the video smoothly with cinematic motion")
-            logger.info(f"[VIDEO_EXPAND] Step 4: Generating with Kling v2.5, prompt: '{final_prompt}'")
+            logger.info(f"[VIDEO_EXPAND] Step 3: Calling Kling v2.5 with prompt: '{final_prompt[:100]}...'")
 
             # Step 5: Call Kling v2.5 with last frame as start_image
-            # Kling uses start_image (URI) for image-to-video with strong prompt following
             inputs = {
                 "prompt": final_prompt,
-                "start_image": frame_data_uri,  # Last frame as starting point
-                "duration": config.get("duration", 5),  # 5 or 10 seconds
-                "aspect_ratio": "16:9",  # Match common video format
-                "negative_prompt": "blurry, low quality, distorted, glitch, static",
-                "guidance_scale": 0.7,  # Higher = stronger prompt following
+                "start_image": frame_data_uri,
+                "duration": config.get("duration", 5),
+                "aspect_ratio": "16:9",
+                "negative_prompt": "blurry, low quality, distorted, glitch, static, watermark",
+                "guidance_scale": 0.7,
             }
 
             success, gen_result = await self._make_request(
@@ -274,74 +242,19 @@ class ReplicateService:
             )
 
             if not success:
+                logger.error(f"[VIDEO_EXPAND] Kling generation failed: {gen_result}")
                 return False, f"AI generation failed: {gen_result}"
 
+            # Extract video URL from result
             gen_video_url = gen_result.get("url") if isinstance(gen_result, dict) else gen_result
             if not gen_video_url:
                 return False, "No video URL in generation result"
-            logger.info(f"[VIDEO_EXPAND] Generated video URL: {gen_video_url}")
 
-            # Step 6: Download generated video
-            logger.info(f"[VIDEO_EXPAND] Step 5: Downloading generated video...")
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.get(gen_video_url)
-                response.raise_for_status()
-                with open(gen_video_path, "wb") as f:
-                    f.write(response.content)
-            logger.info(f"[VIDEO_EXPAND] Generated video downloaded: {len(response.content)} bytes")
+            logger.info(f"[VIDEO_EXPAND] SUCCESS! Generated video: {gen_video_url}")
 
-            # Step 7: Stitch videos using filter_complex for better compatibility
-            logger.info(f"[VIDEO_EXPAND] Step 6: Stitching videos with filter_complex...")
-
-            # Use filter_complex concat for better compatibility
-            stitch_cmd = [
-                "ffmpeg", "-y",
-                "-i", normalized_input_path,
-                "-i", gen_video_path,
-                "-filter_complex", "[0:v][1:v]concat=n=2:v=1:a=0[outv]",
-                "-map", "[outv]",
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
-                "-movflags", "+faststart",
-                output_video_path
-            ]
-
-            stitch_result = await asyncio.to_thread(
-                subprocess.run, stitch_cmd,
-                capture_output=True, text=True,
-                timeout=180  # 3 minute timeout for stitching
-            )
-
-            if stitch_result.returncode != 0:
-                logger.error(f"[VIDEO_EXPAND] FFmpeg stitch error: {stitch_result.stderr}")
-                logger.warning(f"[VIDEO_EXPAND] Fallback: returning only generated video")
-                return True, {"url": gen_video_url}
-
-            # Check output file exists and has content
-            if not os.path.exists(output_video_path):
-                logger.error(f"[VIDEO_EXPAND] Output file not created!")
-                return True, {"url": gen_video_url}
-
-            output_size = os.path.getsize(output_video_path)
-            logger.info(f"[VIDEO_EXPAND] Videos stitched successfully! Output size: {output_size} bytes")
-
-            # Step 8: Upload to Firebase Storage
-            logger.info(f"[VIDEO_EXPAND] Step 7: Uploading to Firebase Storage...")
-            with open(output_video_path, "rb") as f:
-                video_data = f.read()
-
-            upload_success, upload_url, upload_error = await firebase_storage_service.upload_video(
-                video_data,
-                folder="video_expand"
-            )
-            if not upload_success:
-                logger.warning(f"[VIDEO_EXPAND] Firebase upload failed: {upload_error}")
-                logger.warning(f"[VIDEO_EXPAND] Fallback: returning only generated video")
-                return True, {"url": gen_video_url}
-
-            logger.info(f"[VIDEO_EXPAND] Complete! Final stitched video: {upload_url}")
-            return True, {"url": upload_url}
+            # Return the generated continuation video directly
+            # Note: No stitching to avoid Render free tier memory issues
+            return True, {"url": gen_video_url}
 
         except subprocess.TimeoutExpired:
             logger.error(f"[VIDEO_EXPAND] FFmpeg timeout")
@@ -355,7 +268,7 @@ class ReplicateService:
             logger.error(f"[VIDEO_EXPAND] Traceback: {traceback.format_exc()}")
             return False, str(e)
         finally:
-            # Cleanup temp files
+            # Cleanup temp files immediately to free memory
             if temp_dir and os.path.exists(temp_dir):
                 try:
                     shutil.rmtree(temp_dir)
