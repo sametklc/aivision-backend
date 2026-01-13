@@ -405,8 +405,16 @@ class ReplicateService:
                 # xrunda/hello - Roop face swap implementation
                 # source = the face image (face to use)
                 # target = the video/image to swap face into
-                inputs["source"] = kwargs.get("face_image_url") or image_url  # Face source
-                inputs["target"] = kwargs.get("video_url")  # Target video
+                source_face = kwargs.get("face_image_url") or image_url
+                target_video = kwargs.get("video_url")
+
+                if not source_face:
+                    raise ValueError("Face Swap Video requires a source face image")
+                if not target_video:
+                    raise ValueError("Face Swap Video requires a target video")
+
+                inputs["source"] = source_face
+                inputs["target"] = target_video
                 inputs["use_gfpgan"] = True  # Enhance face details
                 inputs["keep_fps"] = True  # Maintain original video speed
 
