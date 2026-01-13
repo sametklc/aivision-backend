@@ -792,19 +792,20 @@ class ReplicateService:
 
             case "time_machine":
                 # bytedance/flux-pulid - Age transformation with face preservation
-                # This model excels at generating the same person at different ages
+                # TUNED for drastic facial changes (aging/de-aging, retro styles)
+                # Higher guidance_scale = more attention to prompt, less to exact face texture
                 inputs["main_face_image"] = image_url
                 base_prompt = prompt or config.get("default_prompt", "professional portrait photo")
                 inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
-                inputs["negative_prompt"] = "ugly, blurry, low quality, deformed, disfigured, bad anatomy, wrong face, different person"
-                # Face preservation params from config
-                inputs["id_weight"] = config.get("id_weight", 1.2)  # Strong face similarity
-                inputs["start_step"] = config.get("start_step", 1)  # Balance fidelity/editability
-                inputs["num_steps"] = config.get("num_steps", 20)
-                inputs["guidance_scale"] = config.get("guidance_scale", 4.0)
-                # Output settings
-                inputs["width"] = 1024
-                inputs["height"] = 1024
+                inputs["negative_prompt"] = "ugly, blurry, low quality, deformed, disfigured, bad anatomy"
+                # TUNED PARAMS for transformation effects:
+                inputs["guidance_scale"] = 7.5  # HIGH: Forces model to follow prompt (aging keywords)
+                inputs["num_steps"] = 28        # More steps for better detail at high guidance
+                inputs["id_weight"] = 0.8       # REDUCED: Allow more facial changes
+                inputs["start_step"] = 2        # Later start = more editability
+                # Output settings - portrait aspect ratio
+                inputs["width"] = 896
+                inputs["height"] = 1152
                 inputs["output_format"] = "png"
 
         return inputs

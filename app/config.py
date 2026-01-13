@@ -384,14 +384,15 @@ AI_MODELS = {
         "version": "8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b",
         "category": "magic_edit",
         "description": "See yourself at different ages - past or future",
-        "cost_per_run": 0.02,
+        "cost_per_run": 0.03,  # Slightly higher due to more steps
         "supports": ["image", "prompt"],
         "default_prompt": "professional portrait photo, high quality, detailed face",
-        # Optimal params for face preservation
-        "id_weight": 1.2,  # Strong face preservation (0-3, higher = more similar)
-        "start_step": 1,   # Balance between fidelity and editability (0-4)
-        "num_steps": 20,   # Quality steps
-        "guidance_scale": 4.0,  # Text prompt influence
+        # TUNED for drastic transformations (aging/de-aging, retro styles)
+        # Higher guidance = more prompt adherence, lower id_weight = more facial changes
+        "guidance_scale": 7.5,  # HIGH: Follow prompt keywords like "wrinkled", "young"
+        "id_weight": 0.8,       # REDUCED: Allow aging/style changes
+        "start_step": 2,        # Later start = more editability
+        "num_steps": 28,        # More steps for detail at high guidance
     },
     "style_transfer": {
         "model": "fofr/style-transfer",
