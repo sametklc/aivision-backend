@@ -164,26 +164,24 @@ class ReplicateService:
         config: Dict[str, Any]
     ) -> Tuple[bool, Any]:
         """
-        Process video expansion:
+        Process video expansion (simplified for Render free tier):
         1. Download input video
         2. Extract last frame using FFmpeg
         3. Call Replicate model with last frame
-        4. Download generated continuation
-        5. Stitch videos together
-        6. Return final video URL
+        4. Return generated continuation URL directly (no stitching)
         """
         temp_dir = None
         try:
+            import base64
+
             # Create temp directory for processing
             temp_dir = tempfile.mkdtemp(prefix="video_expand_")
             input_video_path = os.path.join(temp_dir, "input.mp4")
             last_frame_path = os.path.join(temp_dir, "last_frame.jpg")
-            generated_video_path = os.path.join(temp_dir, "generated.mp4")
-            output_video_path = os.path.join(temp_dir, "output.mp4")
 
             # Step 1: Download input video
             logger.info(f"[VIDEO_EXPAND] Downloading input video...")
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 response = await client.get(video_url)
                 response.raise_for_status()
                 with open(input_video_path, "wb") as f:
@@ -202,19 +200,20 @@ class ReplicateService:
             ]
             result = await asyncio.to_thread(
                 subprocess.run, extract_cmd,
-                capture_output=True, text=True
+                capture_output=True, text=True,
+                timeout=30  # 30 second timeout for FFmpeg
             )
             if result.returncode != 0:
                 logger.error(f"FFmpeg extract error: {result.stderr}")
                 return False, f"Failed to extract last frame: {result.stderr}"
-            logger.info(f"[VIDEO_EXPAND] Last frame extracted: {last_frame_path}")
+            logger.info(f"[VIDEO_EXPAND] Last frame extracted")
 
-            # Step 3: Upload last frame to get URL (using data URI for simplicity)
-            import base64
+            # Step 3: Convert last frame to base64 data URI
             with open(last_frame_path, "rb") as f:
                 frame_data = f.read()
             frame_base64 = base64.b64encode(frame_data).decode("utf-8")
             frame_data_uri = f"data:image/jpeg;base64,{frame_base64}"
+            logger.info(f"[VIDEO_EXPAND] Frame size: {len(frame_data)} bytes")
 
             # Step 4: Call Replicate model with last frame
             logger.info(f"[VIDEO_EXPAND] Generating continuation with AI...")
@@ -236,104 +235,17 @@ class ReplicateService:
             if not success:
                 return False, f"AI generation failed: {gen_result}"
 
-            # Get generated video URL
+            # Step 5: Return generated video URL directly (no stitching to save resources)
             gen_video_url = gen_result.get("url") if isinstance(gen_result, dict) else gen_result
             if not gen_video_url:
                 return False, "No video URL in generation result"
-            logger.info(f"[VIDEO_EXPAND] Generated video URL: {gen_video_url}")
 
-            # Step 5: Download generated video
-            logger.info(f"[VIDEO_EXPAND] Downloading generated video...")
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                response = await client.get(gen_video_url)
-                response.raise_for_status()
-                with open(generated_video_path, "wb") as f:
-                    f.write(response.content)
-            logger.info(f"[VIDEO_EXPAND] Generated video downloaded: {len(response.content)} bytes")
+            logger.info(f"[VIDEO_EXPAND] Complete! Generated video: {gen_video_url}")
+            return True, {"url": gen_video_url}
 
-            # Step 6: Get input video properties (fps, resolution)
-            width, height, fps = 480, 480, 16  # Default values
-            probe_cmd = [
-                "ffprobe", "-v", "error",
-                "-select_streams", "v:0",
-                "-show_entries", "stream=width,height,r_frame_rate",
-                "-of", "csv=p=0",
-                input_video_path
-            ]
-            probe_result = await asyncio.to_thread(
-                subprocess.run, probe_cmd,
-                capture_output=True, text=True
-            )
-            if probe_result.returncode == 0:
-                # Parse: width,height,fps_num/fps_den
-                parts = probe_result.stdout.strip().split(",")
-                if len(parts) >= 3:
-                    width, height = int(parts[0]), int(parts[1])
-                    fps_parts = parts[2].split("/")
-                    fps = int(fps_parts[0]) / int(fps_parts[1]) if len(fps_parts) == 2 else 16
-            logger.info(f"[VIDEO_EXPAND] Input video: {width}x{height} @ {fps}fps")
-
-            # Step 7: Re-encode generated video to match input
-            normalized_gen_path = os.path.join(temp_dir, "generated_normalized.mp4")
-            normalize_cmd = [
-                "ffmpeg", "-y",
-                "-i", generated_video_path,
-                "-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2",
-                "-r", str(int(fps)),
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
-                "-an",  # Remove audio from generated
-                normalized_gen_path
-            ]
-            norm_result = await asyncio.to_thread(
-                subprocess.run, normalize_cmd,
-                capture_output=True, text=True
-            )
-            if norm_result.returncode != 0:
-                logger.warning(f"Normalize failed, using original: {norm_result.stderr}")
-                normalized_gen_path = generated_video_path
-
-            # Step 8: Create concat file
-            concat_file_path = os.path.join(temp_dir, "concat.txt")
-            with open(concat_file_path, "w") as f:
-                f.write(f"file '{input_video_path}'\n")
-                f.write(f"file '{normalized_gen_path}'\n")
-
-            # Step 9: Stitch videos using FFmpeg concat demuxer
-            logger.info(f"[VIDEO_EXPAND] Stitching videos...")
-            stitch_cmd = [
-                "ffmpeg", "-y",
-                "-f", "concat",
-                "-safe", "0",
-                "-i", concat_file_path,
-                "-c:v", "libx264",
-                "-preset", "fast",
-                "-crf", "23",
-                "-c:a", "aac",
-                "-b:a", "128k",
-                output_video_path
-            ]
-            stitch_result = await asyncio.to_thread(
-                subprocess.run, stitch_cmd,
-                capture_output=True, text=True
-            )
-            if stitch_result.returncode != 0:
-                logger.error(f"FFmpeg stitch error: {stitch_result.stderr}")
-                return False, f"Failed to stitch videos: {stitch_result.stderr}"
-            logger.info(f"[VIDEO_EXPAND] Videos stitched successfully")
-
-            # Step 10: Read final video and return as base64 data URI
-            # (In production, you'd upload to cloud storage and return URL)
-            with open(output_video_path, "rb") as f:
-                final_video_data = f.read()
-
-            final_base64 = base64.b64encode(final_video_data).decode("utf-8")
-            final_data_uri = f"data:video/mp4;base64,{final_base64}"
-
-            logger.info(f"[VIDEO_EXPAND] Complete! Final video size: {len(final_video_data)} bytes")
-            return True, {"url": final_data_uri}
-
+        except subprocess.TimeoutExpired:
+            logger.error(f"[VIDEO_EXPAND] FFmpeg timeout")
+            return False, "Video processing timed out"
         except httpx.HTTPError as e:
             logger.error(f"[VIDEO_EXPAND] HTTP error: {e}")
             return False, f"Download failed: {str(e)}"
@@ -346,9 +258,9 @@ class ReplicateService:
                 import shutil
                 try:
                     shutil.rmtree(temp_dir)
-                    logger.debug(f"[VIDEO_EXPAND] Cleaned up temp dir: {temp_dir}")
+                    logger.debug(f"[VIDEO_EXPAND] Cleaned up temp dir")
                 except Exception as e:
-                    logger.warning(f"[VIDEO_EXPAND] Failed to cleanup temp dir: {e}")
+                    logger.warning(f"[VIDEO_EXPAND] Failed to cleanup: {e}")
 
     def _prepare_video_inputs(
         self,
