@@ -394,17 +394,17 @@ AI_MODELS = {
         "num_steps": 20,
     },
     "retro_style": {
-        "model": "tencentarc/photomaker",
-        "version": "ddfc2b08d209f9fa8c1eca692712918bd449f695dabb4a958da31802a9570fe4",
+        "model": "stability-ai/sdxl",
+        "version": None,  # Use latest
         "category": "magic_edit",
         "description": "Retro & Polaroid aesthetic transformations",
-        "cost_per_run": 0.015,
+        "cost_per_run": 0.02,
         "supports": ["image", "prompt"],
-        "default_prompt": "vintage polaroid photo, retro aesthetic, film grain, warm faded colors img",
-        # PhotoMaker params - tuned for strong retro effects
-        "style_strength_ratio": 40,  # HIGH: Strong retro style over original
-        "num_steps": 40,  # Better quality
-        "guidance_scale": 5.0,
+        "default_prompt": "vintage polaroid photo, retro aesthetic, film grain, warm faded colors",
+        # SDXL img2img params - preserves full composition
+        "prompt_strength": 0.75,  # 75% style, 25% original structure
+        "num_inference_steps": 40,
+        "guidance_scale": 7.5,
     },
     "style_transfer": {
         "model": "fofr/style-transfer",

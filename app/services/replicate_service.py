@@ -809,20 +809,17 @@ class ReplicateService:
                 inputs["output_format"] = "png"
 
             case "retro_style":
-                # tencentarc/photomaker - Retro & Polaroid aesthetic transformations
-                # Same model as ai_headshot but tuned for stronger style effects
-                inputs["input_image"] = image_url  # PhotoMaker uses input_image
+                # stability-ai/sdxl - IMG2IMG for Retro & Polaroid aesthetics
+                # PRESERVES FULL COMPOSITION - no cropping, no face reconstruction
+                inputs["image"] = image_url  # Full input image
                 base_prompt = prompt or config.get("default_prompt", "vintage polaroid photo, retro aesthetic")
-                # PhotoMaker requires "img" trigger word at the end
-                styled_prompt = apply_style_to_prompt(base_prompt, style)
-                if not styled_prompt.strip().endswith("img"):
-                    styled_prompt = f"{styled_prompt} img"
-                inputs["prompt"] = styled_prompt
-                inputs["negative_prompt"] = "clean, digital, 3d render, cartoon, illustration, low quality, bad anatomy, distorted face, modern, sharp"
-                # PhotoMaker params - tuned for STRONG retro effects
-                inputs["style_strength_ratio"] = config.get("style_strength_ratio", 40)  # HIGH for retro
-                inputs["num_steps"] = config.get("num_steps", 40)
-                inputs["guidance_scale"] = config.get("guidance_scale", 5.0)
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                inputs["negative_prompt"] = "ugly, distorted, low quality, blurred, disfigured, cropping, out of frame, modern, digital, clean"
+                # CRITICAL: prompt_strength controls style vs original balance
+                # 0.75 = 75% retro style, 25% original structure preserved
+                inputs["prompt_strength"] = config.get("prompt_strength", 0.75)
+                inputs["num_inference_steps"] = config.get("num_inference_steps", 40)
+                inputs["guidance_scale"] = config.get("guidance_scale", 7.5)
 
         return inputs
 
