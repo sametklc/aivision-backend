@@ -164,20 +164,27 @@ class ReplicateService:
         config: Dict[str, Any]
     ) -> Tuple[bool, Any]:
         """
-        Process video expansion (simplified for Render free tier):
+        Process video expansion with stitching:
         1. Download input video
         2. Extract last frame using FFmpeg
         3. Call Replicate model with last frame
-        4. Return generated continuation URL directly (no stitching)
+        4. Download generated video
+        5. Stitch videos together (fast, no re-encoding)
+        6. Upload to Cloudinary
+        7. Return Cloudinary URL
         """
+        from .cloudinary_service import cloudinary_service
+        import base64
+        import shutil
+
         temp_dir = None
         try:
-            import base64
-
             # Create temp directory for processing
             temp_dir = tempfile.mkdtemp(prefix="video_expand_")
             input_video_path = os.path.join(temp_dir, "input.mp4")
             last_frame_path = os.path.join(temp_dir, "last_frame.jpg")
+            gen_video_path = os.path.join(temp_dir, "generated.mp4")
+            output_video_path = os.path.join(temp_dir, "output.mp4")
 
             # Step 1: Download input video
             logger.info(f"[VIDEO_EXPAND] Downloading input video...")
@@ -192,16 +199,16 @@ class ReplicateService:
             logger.info(f"[VIDEO_EXPAND] Extracting last frame...")
             extract_cmd = [
                 "ffmpeg", "-y",
-                "-sseof", "-0.1",  # Seek to 0.1 seconds before end
+                "-sseof", "-0.1",
                 "-i", input_video_path,
                 "-vframes", "1",
-                "-q:v", "2",  # High quality JPEG
+                "-q:v", "2",
                 last_frame_path
             ]
             result = await asyncio.to_thread(
                 subprocess.run, extract_cmd,
                 capture_output=True, text=True,
-                timeout=30  # 30 second timeout for FFmpeg
+                timeout=30
             )
             if result.returncode != 0:
                 logger.error(f"FFmpeg extract error: {result.stderr}")
@@ -213,14 +220,13 @@ class ReplicateService:
                 frame_data = f.read()
             frame_base64 = base64.b64encode(frame_data).decode("utf-8")
             frame_data_uri = f"data:image/jpeg;base64,{frame_base64}"
-            logger.info(f"[VIDEO_EXPAND] Frame size: {len(frame_data)} bytes")
 
             # Step 4: Call Replicate model with last frame
             logger.info(f"[VIDEO_EXPAND] Generating continuation with AI...")
             inputs = {
                 "image": frame_data_uri,
                 "prompt": prompt or config.get("default_prompt", "Continue the motion smoothly, high quality"),
-                "num_frames": 81,  # ~5 seconds at 16fps
+                "num_frames": 81,
                 "resolution": "480p",
                 "frames_per_second": 16,
             }
@@ -235,13 +241,63 @@ class ReplicateService:
             if not success:
                 return False, f"AI generation failed: {gen_result}"
 
-            # Step 5: Return generated video URL directly (no stitching to save resources)
             gen_video_url = gen_result.get("url") if isinstance(gen_result, dict) else gen_result
             if not gen_video_url:
                 return False, "No video URL in generation result"
+            logger.info(f"[VIDEO_EXPAND] Generated video URL: {gen_video_url}")
 
-            logger.info(f"[VIDEO_EXPAND] Complete! Generated video: {gen_video_url}")
-            return True, {"url": gen_video_url}
+            # Step 5: Download generated video
+            logger.info(f"[VIDEO_EXPAND] Downloading generated video...")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.get(gen_video_url)
+                response.raise_for_status()
+                with open(gen_video_path, "wb") as f:
+                    f.write(response.content)
+            logger.info(f"[VIDEO_EXPAND] Generated video downloaded: {len(response.content)} bytes")
+
+            # Step 6: Stitch videos together (fast concat with re-encoding for compatibility)
+            logger.info(f"[VIDEO_EXPAND] Stitching videos...")
+            concat_file = os.path.join(temp_dir, "concat.txt")
+            with open(concat_file, "w") as f:
+                f.write(f"file '{input_video_path}'\n")
+                f.write(f"file '{gen_video_path}'\n")
+
+            stitch_cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_file,
+                "-c:v", "libx264",
+                "-preset", "ultrafast",  # Fast encoding
+                "-crf", "28",  # Lower quality for speed
+                "-c:a", "aac",
+                "-b:a", "128k",
+                "-movflags", "+faststart",
+                output_video_path
+            ]
+            stitch_result = await asyncio.to_thread(
+                subprocess.run, stitch_cmd,
+                capture_output=True, text=True,
+                timeout=120  # 2 minute timeout for stitching
+            )
+            if stitch_result.returncode != 0:
+                logger.error(f"FFmpeg stitch error: {stitch_result.stderr}")
+                # Fallback: return just the generated video
+                return True, {"url": gen_video_url}
+            logger.info(f"[VIDEO_EXPAND] Videos stitched successfully")
+
+            # Step 7: Upload to Cloudinary
+            logger.info(f"[VIDEO_EXPAND] Uploading to Cloudinary...")
+            with open(output_video_path, "rb") as f:
+                video_data = f.read()
+
+            upload_success, upload_url, upload_error = await cloudinary_service.upload_video(video_data)
+            if not upload_success:
+                logger.warning(f"Cloudinary upload failed: {upload_error}, returning generated video URL")
+                return True, {"url": gen_video_url}
+
+            logger.info(f"[VIDEO_EXPAND] Complete! Final video: {upload_url}")
+            return True, {"url": upload_url}
 
         except subprocess.TimeoutExpired:
             logger.error(f"[VIDEO_EXPAND] FFmpeg timeout")
@@ -255,7 +311,6 @@ class ReplicateService:
         finally:
             # Cleanup temp files
             if temp_dir and os.path.exists(temp_dir):
-                import shutil
                 try:
                     shutil.rmtree(temp_dir)
                     logger.debug(f"[VIDEO_EXPAND] Cleaned up temp dir")
