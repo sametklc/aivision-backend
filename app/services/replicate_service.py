@@ -119,6 +119,16 @@ class ReplicateService:
             logger.info(f"[VIDEO_EXPAND] Processing video: {video_url}")
             return await self._process_video_expand(video_url, prompt, model_config)
 
+        # Special handling for face_swap_video: preprocess video to H.264
+        if tool_id == "face_swap_video":
+            video_url = kwargs.get("video_url")
+            if video_url:
+                logger.info(f"[FACE_SWAP] Preprocessing video for compatibility...")
+                processed_url = await self._preprocess_video_for_faceswap(video_url)
+                if processed_url:
+                    kwargs["video_url"] = processed_url
+                    logger.info(f"[FACE_SWAP] Using preprocessed video: {processed_url}")
+
         inputs = self._prepare_video_inputs(tool_id, image_url, prompt, model_config, kwargs)
 
         return await self._make_request(
@@ -156,6 +166,91 @@ class ReplicateService:
             category="tts",
             version=tts_version
         )
+
+    async def _preprocess_video_for_faceswap(self, video_url: str) -> Optional[str]:
+        """
+        Preprocess video for face_swap_video to avoid FFmpeg codec issues.
+        Downloads video, re-encodes to H.264/AAC, uploads to Cloudinary.
+
+        Returns:
+            New video URL or None if preprocessing fails/not needed
+        """
+        input_path = None
+        output_path = None
+
+        try:
+            # Download video
+            logger.info(f"[FACE_SWAP] Downloading video from {video_url[:50]}...")
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.get(video_url)
+                if response.status_code != 200:
+                    logger.warning(f"[FACE_SWAP] Failed to download video: {response.status_code}")
+                    return None
+                video_data = response.content
+
+            # Save to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as f:
+                f.write(video_data)
+                input_path = f.name
+
+            # Re-encode with FFmpeg to H.264/AAC (compatible format)
+            output_path = tempfile.mktemp(suffix='_processed.mp4')
+
+            ffmpeg_cmd = [
+                'ffmpeg', '-y',
+                '-i', input_path,
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-crf', '23',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                '-movflags', '+faststart',
+                '-pix_fmt', 'yuv420p',
+                output_path
+            ]
+
+            logger.info(f"[FACE_SWAP] Re-encoding video to H.264...")
+            result = subprocess.run(
+                ffmpeg_cmd,
+                capture_output=True,
+                timeout=300  # 5 minute timeout
+            )
+
+            if result.returncode != 0:
+                logger.warning(f"[FACE_SWAP] FFmpeg re-encode failed: {result.stderr.decode()[:200]}")
+                return None
+
+            # Upload to Cloudinary
+            with open(output_path, 'rb') as f:
+                processed_data = f.read()
+
+            from .cloudinary_service import cloudinary_service
+            success, new_url, error = await cloudinary_service.upload_video(
+                processed_data,
+                folder="aivision/faceswap_processed"
+            )
+
+            if success:
+                logger.info(f"[FACE_SWAP] Preprocessed video uploaded: {new_url}")
+                return new_url
+            else:
+                logger.warning(f"[FACE_SWAP] Cloudinary upload failed: {error}")
+                return None
+
+        except subprocess.TimeoutExpired:
+            logger.error("[FACE_SWAP] FFmpeg timeout")
+            return None
+        except Exception as e:
+            logger.error(f"[FACE_SWAP] Preprocessing error: {str(e)}")
+            return None
+        finally:
+            # Cleanup temp files
+            for path in [input_path, output_path]:
+                if path and os.path.exists(path):
+                    try:
+                        os.unlink(path)
+                    except:
+                        pass
 
     async def _process_video_expand(
         self,
