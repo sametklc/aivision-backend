@@ -402,9 +402,9 @@ class ReplicateService:
                     inputs["background_color"] = "transparent"
 
             case "face_swap_video":
-                # xrunda/hello - Roop face swap implementation
-                # source = the face image (face to use)
-                # target = the video/image to swap face into
+                # arabyai-replicate/roop_face_swap - Roop face swap
+                # swap_image = the face image (face to use)
+                # target_video = the video to swap face into
                 source_face = kwargs.get("face_image_url") or image_url
                 target_video = kwargs.get("video_url")
 
@@ -413,10 +413,8 @@ class ReplicateService:
                 if not target_video:
                     raise ValueError("Face Swap Video requires a target video")
 
-                inputs["source"] = source_face
-                inputs["target"] = target_video
-                inputs["use_gfpgan"] = True  # Enhance face details
-                inputs["keep_fps"] = True  # Maintain original video speed
+                inputs["swap_image"] = source_face
+                inputs["target_video"] = target_video
 
         return inputs
 

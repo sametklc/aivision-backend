@@ -169,8 +169,8 @@ AI_MODELS = {
         "supports": ["video"],
     },
     "face_swap_video": {
-        "model": "xrunda/hello",
-        "version": "104b4a39315349db50880757bc8c1c996c5309e3aa11286b0a3c84dab81fd440",
+        "model": "arabyai-replicate/roop_face_swap",
+        "version": None,  # Use latest version
         "category": "video",
         "description": "Swap faces in videos (Roop)",
         "cost_per_run": 0.12,
