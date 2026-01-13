@@ -384,15 +384,28 @@ AI_MODELS = {
         "version": "8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b",
         "category": "magic_edit",
         "description": "See yourself at different ages - past or future",
-        "cost_per_run": 0.03,  # Slightly higher due to more steps
+        "cost_per_run": 0.03,
         "supports": ["image", "prompt"],
         "default_prompt": "professional portrait photo, high quality, detailed face",
-        # TUNED for drastic transformations (aging/de-aging, retro styles)
-        # Higher guidance = more prompt adherence, lower id_weight = more facial changes
-        "guidance_scale": 7.5,  # HIGH: Follow prompt keywords like "wrinkled", "young"
-        "id_weight": 0.8,       # REDUCED: Allow aging/style changes
-        "start_step": 2,        # Later start = more editability
-        "num_steps": 20,        # Max allowed by model
+        # TUNED for drastic transformations (aging/de-aging)
+        "guidance_scale": 7.5,
+        "id_weight": 0.8,
+        "start_step": 2,
+        "num_steps": 20,
+    },
+    "retro_style": {
+        "model": "zsxkib/instant-id",
+        "version": "2e4785a4d80dadf580077b2244c8d7c05d8e3faac04a04c02d8e099dd2876789",
+        "category": "magic_edit",
+        "description": "Retro & Polaroid aesthetic transformations",
+        "cost_per_run": 0.02,
+        "supports": ["image", "prompt"],
+        "default_prompt": "vintage polaroid photo, retro aesthetic, film grain, warm faded colors",
+        # InstantID params - balanced for style transformation
+        "ip_adapter_scale": 0.6,  # Lower = more style flexibility
+        "controlnet_conditioning_scale": 0.6,  # Lower = allow more changes
+        "guidance_scale": 7.0,  # Follow prompt well
+        "num_inference_steps": 30,
     },
     "style_transfer": {
         "model": "fofr/style-transfer",
@@ -423,6 +436,6 @@ TOOL_CATEGORIES = {
         "magic_eraser", "ai_headshot", "clothes_swap", "bg_remix",
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
         "product_shoot", "text_effects", "tattoo_tryon", "style_transfer",
-        "time_machine"
+        "time_machine", "retro_style"
     ]
 }

@@ -808,6 +808,23 @@ class ReplicateService:
                 inputs["height"] = 1152
                 inputs["output_format"] = "png"
 
+            case "retro_style":
+                # zsxkib/instant-id - Retro & Polaroid aesthetic transformations
+                # Uses InstantID for face-preserving style transfer
+                inputs["image"] = image_url
+                base_prompt = prompt or config.get("default_prompt", "vintage polaroid photo, retro aesthetic")
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                inputs["negative_prompt"] = "ugly, blurry, low quality, deformed, modern, digital, sharp, clean"
+                # InstantID params - balanced for style transformation
+                inputs["ip_adapter_scale"] = config.get("ip_adapter_scale", 0.6)  # Face similarity
+                inputs["controlnet_conditioning_scale"] = config.get("controlnet_conditioning_scale", 0.6)
+                inputs["guidance_scale"] = config.get("guidance_scale", 7.0)
+                inputs["num_inference_steps"] = config.get("num_inference_steps", 30)
+                # Output settings
+                inputs["output_format"] = "png"
+                inputs["output_quality"] = 95
+                inputs["enhance_nonface_region"] = True
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
