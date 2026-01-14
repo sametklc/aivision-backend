@@ -475,7 +475,7 @@ AI_MODELS = {
     # FLUX DEV LORA STYLE TRANSFERS (Retro/Vintage Effects)
     # ─────────────────────────────────────────────────────────────────────
     "vhs_style": {
-        "model": "lucataco/flux-dev-lora",
+        "model": "black-forest-labs/flux-dev-lora",
         "version": None,  # Use latest
         "category": "magic_edit",
         "description": "VHS retro effect - 90s analog glitch aesthetic",
@@ -491,7 +491,7 @@ AI_MODELS = {
         "num_inference_steps": 28,
     },
     "polaroid_style": {
-        "model": "lucataco/flux-dev-lora",
+        "model": "black-forest-labs/flux-dev-lora",
         "version": None,  # Use latest
         "category": "magic_edit",
         "description": "Polaroid instant film - vintage flash photography aesthetic",
