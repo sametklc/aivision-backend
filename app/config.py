@@ -482,11 +482,7 @@ AI_MODELS = {
         "cost_per_run": 0.032,
         "supports": ["image", "prompt"],
         # LoRA config
-<<<<<<< HEAD
-        "hf_lora": "huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-VHS/vhs-v1.safetensors",
-=======
         "hf_lora": "huggingface.co/Muapi/vhx-the-flux-vhs-lora/vhx-the-flux-vhs-lora.safetensors",
->>>>>>> 22133ac (Fix VHS/Polaroid LoRA: use working HuggingFace repositories)
         "lora_scale": 1.0,
         "prompt_strength": 0.85,
         "guidance_scale": 3.5,
@@ -502,11 +498,7 @@ AI_MODELS = {
         "cost_per_run": 0.032,
         "supports": ["image", "prompt"],
         # LoRA config
-<<<<<<< HEAD
-        "hf_lora": "huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-Polaroid/polaroid-v1.safetensors",
-=======
         "hf_lora": "huggingface.co/prithivMLmods/Flux-Polaroid-Plus/polaroid-plus.safetensors",
->>>>>>> 22133ac (Fix VHS/Polaroid LoRA: use working HuggingFace repositories)
         "lora_scale": 0.9,
         "prompt_strength": 0.80,
         "guidance_scale": 3.5,
