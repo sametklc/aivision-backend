@@ -355,6 +355,26 @@ TOOL_METADATA = {
         "max_duration": None,
         "example_prompt": None,
     },
+    "vhs_style": {
+        "name": "VHS Style",
+        "description": "90s retro analog glitch effect",
+        "category": ToolCategory.MAGIC_EDIT,
+        "input_type": "image_text",
+        "supports_styles": False,
+        "supports_aspect_ratio": False,
+        "max_duration": None,
+        "example_prompt": "retro 90s movie scene, analog tape distortion",
+    },
+    "polaroid_style": {
+        "name": "Polaroid Style",
+        "description": "Vintage instant film aesthetic",
+        "category": ToolCategory.MAGIC_EDIT,
+        "input_type": "image_text",
+        "supports_styles": False,
+        "supports_aspect_ratio": False,
+        "max_duration": None,
+        "example_prompt": "instant film, flash photography, vintage memory",
+    },
 }
 
 
