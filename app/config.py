@@ -482,7 +482,7 @@ AI_MODELS = {
         "cost_per_run": 0.032,
         "supports": ["image", "prompt"],
         # LoRA config
-        "hf_lora": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-VHS/resolve/main/vhs-v1.safetensors",
+        "hf_lora": "huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-VHS/vhs-v1.safetensors",
         "lora_scale": 1.0,
         "prompt_strength": 0.85,
         "guidance_scale": 3.5,
@@ -498,7 +498,7 @@ AI_MODELS = {
         "cost_per_run": 0.032,
         "supports": ["image", "prompt"],
         # LoRA config
-        "hf_lora": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-Polaroid/resolve/main/polaroid-v1.safetensors",
+        "hf_lora": "huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-Polaroid/polaroid-v1.safetensors",
         "lora_scale": 0.9,
         "prompt_strength": 0.80,
         "guidance_scale": 3.5,
