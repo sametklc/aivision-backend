@@ -517,7 +517,7 @@ AI_MODELS = {
         "cost_per_run": 0.15,  # $0.15 for K/2K, $0.30 for 4K
         "supports": ["image", "prompt"],
         # Nano Banana Pro params - Resolution: "K" (1K), "2K", "4K"
-        "resolution": "K",  # K=1K, 2K, 4K (API requires "K" not "1K")
+        "resolution": "2K",  # Valid: K, 2K, 4K (API changed from 1K to K)
         "aspect_ratio": "match_input_image",  # 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9
         "output_format": "jpg",  # jpg, png
         "safety_filter_level": "block_only_high",  # block_low_and_above, block_medium_and_above, block_only_high
