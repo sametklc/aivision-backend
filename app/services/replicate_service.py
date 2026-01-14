@@ -935,8 +935,12 @@ class ReplicateService:
                 # Image input - accepts array of image URIs
                 if image_url:
                     inputs["image_input"] = [image_url]
-                # Resolution: "K", "2K", "4K" (API uses "K" not "1K")
-                inputs["resolution"] = kwargs.get("resolution", config.get("resolution", "2K"))
+                # Resolution: "K", "2K", "4K" only! (NOT 720p, 1080p etc)
+                # Ignore kwargs.resolution since it may contain video resolutions like "720p"
+                nano_resolution = config.get("resolution", "2K")
+                if nano_resolution not in ["K", "2K", "4K"]:
+                    nano_resolution = "2K"  # Safe default
+                inputs["resolution"] = nano_resolution
                 # Aspect ratio - use match_input_image for img2img
                 inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "match_input_image"))
                 # Output format
