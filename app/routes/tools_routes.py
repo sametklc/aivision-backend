@@ -387,6 +387,46 @@ async def list_tools():
     )
 
 
+@router.get("/admin/models")
+async def get_admin_models():
+    """
+    Get all AI models with full configuration for admin panel.
+    Returns the raw AI_MODELS config with supports, description, etc.
+    MUST be defined BEFORE /{tool_id} to avoid route conflict!
+    """
+    models = []
+
+    for tool_id, config in AI_MODELS.items():
+        # Determine output type based on category
+        output_type = "video" if config.get("category") == "video" else "image"
+
+        # Get metadata name if available
+        name = TOOL_METADATA.get(tool_id, {}).get("name", tool_id.replace("_", " ").title())
+
+        model_info = {
+            "tool_id": tool_id,
+            "name": name,
+            "model": config.get("model", ""),
+            "description": config.get("description", ""),
+            "category": config.get("category", ""),
+            "supports": config.get("supports", []),
+            "cost_per_run": config.get("cost_per_run", 0),
+            "output_type": output_type,
+            "default_prompt": config.get("default_prompt"),
+        }
+        models.append(model_info)
+
+    # Sort by category then by name
+    models.sort(key=lambda x: (x["category"], x["name"]))
+
+    return {
+        "success": True,
+        "models": models,
+        "total_count": len(models),
+        "categories": list(set(m["category"] for m in models)),
+    }
+
+
 @router.get("/{tool_id}", response_model=ToolInfo)
 async def get_tool(tool_id: str):
     """Get information about a specific tool."""
@@ -444,43 +484,4 @@ async def list_tools_by_category(category: str):
         "category": category,
         "tools": tools,
         "total_count": len(tools),
-    }
-
-
-@router.get("/admin/models")
-async def get_admin_models():
-    """
-    Get all AI models with full configuration for admin panel.
-    Returns the raw AI_MODELS config with supports, description, etc.
-    """
-    models = []
-
-    for tool_id, config in AI_MODELS.items():
-        # Determine output type based on category
-        output_type = "video" if config.get("category") == "video" else "image"
-
-        # Get metadata name if available
-        name = TOOL_METADATA.get(tool_id, {}).get("name", tool_id.replace("_", " ").title())
-
-        model_info = {
-            "tool_id": tool_id,
-            "name": name,
-            "model": config.get("model", ""),
-            "description": config.get("description", ""),
-            "category": config.get("category", ""),
-            "supports": config.get("supports", []),
-            "cost_per_run": config.get("cost_per_run", 0),
-            "output_type": output_type,
-            "default_prompt": config.get("default_prompt"),
-        }
-        models.append(model_info)
-
-    # Sort by category then by name
-    models.sort(key=lambda x: (x["category"], x["name"]))
-
-    return {
-        "success": True,
-        "models": models,
-        "total_count": len(models),
-        "categories": list(set(m["category"] for m in models)),
     }
