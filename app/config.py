@@ -471,6 +471,41 @@ AI_MODELS = {
         "aspect_ratio": "1:1",
         "output_format": "webp",
     },
+    # ─────────────────────────────────────────────────────────────────────
+    # FLUX DEV LORA STYLE TRANSFERS (Retro/Vintage Effects)
+    # ─────────────────────────────────────────────────────────────────────
+    "vhs_style": {
+        "model": "lucataco/flux-dev-lora",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "VHS retro effect - 90s analog glitch aesthetic",
+        "cost_per_run": 0.032,
+        "supports": ["image", "prompt"],
+        # LoRA config
+        "hf_lora": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-VHS/resolve/main/vhs-v1.safetensors",
+        "lora_scale": 1.0,
+        "prompt_strength": 0.85,
+        "guidance_scale": 3.5,
+        "default_prompt": "vhs style, heavy glitch, noise, 1990s footage, analog distortion",
+        "output_format": "webp",
+        "num_inference_steps": 28,
+    },
+    "polaroid_style": {
+        "model": "lucataco/flux-dev-lora",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "Polaroid instant film - vintage flash photography aesthetic",
+        "cost_per_run": 0.032,
+        "supports": ["image", "prompt"],
+        # LoRA config
+        "hf_lora": "https://huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-Polaroid/resolve/main/polaroid-v1.safetensors",
+        "lora_scale": 0.9,
+        "prompt_strength": 0.80,
+        "guidance_scale": 3.5,
+        "default_prompt": "polaroid style, instant film, soft focus, flash photography, vintage aesthetic",
+        "output_format": "webp",
+        "num_inference_steps": 28,
+    },
 }
 
 # Tool categories for frontend - All 33 Tools + 1 new
@@ -489,6 +524,7 @@ TOOL_CATEGORIES = {
         "magic_eraser", "ai_headshot", "clothes_swap", "bg_remix",
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
         "product_shoot", "text_effects", "tattoo_tryon", "style_transfer",
-        "time_machine", "retro_style", "baby_prediction", "flux_pro", "sd35_large"
+        "time_machine", "retro_style", "baby_prediction", "flux_pro", "sd35_large",
+        "vhs_style", "polaroid_style"
     ]
 }

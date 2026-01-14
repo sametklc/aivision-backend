@@ -889,6 +889,44 @@ class ReplicateService:
                 # Output format
                 inputs["output_format"] = config.get("output_format", "webp")
 
+            case "vhs_style":
+                # lucataco/flux-dev-lora with VHS LoRA
+                # Creates 90s VHS analog glitch aesthetic
+                if not image_url:
+                    raise ValueError("VHS Style requires an input image")
+                inputs["image"] = image_url
+                # Build prompt: user prompt + default style prompt
+                base_prompt = prompt or ""
+                default_style = config.get("default_prompt", "vhs style, heavy glitch, noise, 1990s footage, analog distortion")
+                inputs["prompt"] = f"{base_prompt}, {default_style}" if base_prompt else default_style
+                # LoRA config - MUST be arrays
+                inputs["hf_loras"] = [config.get("hf_lora")]
+                inputs["lora_scales"] = [config.get("lora_scale", 1.0)]
+                # Generation params
+                inputs["prompt_strength"] = config.get("prompt_strength", 0.85)
+                inputs["guidance_scale"] = config.get("guidance_scale", 3.5)
+                inputs["num_inference_steps"] = config.get("num_inference_steps", 28)
+                inputs["output_format"] = config.get("output_format", "webp")
+
+            case "polaroid_style":
+                # lucataco/flux-dev-lora with Polaroid LoRA
+                # Creates vintage instant film aesthetic
+                if not image_url:
+                    raise ValueError("Polaroid Style requires an input image")
+                inputs["image"] = image_url
+                # Build prompt: user prompt + default style prompt
+                base_prompt = prompt or ""
+                default_style = config.get("default_prompt", "polaroid style, instant film, soft focus, flash photography, vintage aesthetic")
+                inputs["prompt"] = f"{base_prompt}, {default_style}" if base_prompt else default_style
+                # LoRA config - MUST be arrays
+                inputs["hf_loras"] = [config.get("hf_lora")]
+                inputs["lora_scales"] = [config.get("lora_scale", 0.9)]
+                # Generation params
+                inputs["prompt_strength"] = config.get("prompt_strength", 0.80)
+                inputs["guidance_scale"] = config.get("guidance_scale", 3.5)
+                inputs["num_inference_steps"] = config.get("num_inference_steps", 28)
+                inputs["output_format"] = config.get("output_format", "webp")
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
