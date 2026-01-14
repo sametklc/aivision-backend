@@ -482,11 +482,15 @@ AI_MODELS = {
         "cost_per_run": 0.032,
         "supports": ["image", "prompt"],
         # LoRA config
+<<<<<<< HEAD
         "hf_lora": "huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-VHS/vhs-v1.safetensors",
+=======
+        "hf_lora": "huggingface.co/Muapi/vhx-the-flux-vhs-lora/vhx-the-flux-vhs-lora.safetensors",
+>>>>>>> 22133ac (Fix VHS/Polaroid LoRA: use working HuggingFace repositories)
         "lora_scale": 1.0,
         "prompt_strength": 0.85,
         "guidance_scale": 3.5,
-        "default_prompt": "vhs style, heavy glitch, noise, 1990s footage, analog distortion",
+        "default_prompt": "vhx style, VHS tape recording, analog glitch, 1990s footage, noise distortion",
         "output_format": "webp",
         "num_inference_steps": 28,
     },
@@ -498,11 +502,15 @@ AI_MODELS = {
         "cost_per_run": 0.032,
         "supports": ["image", "prompt"],
         # LoRA config
+<<<<<<< HEAD
         "hf_lora": "huggingface.co/Shakker-Labs/FLUX.1-dev-LoRA-Polaroid/polaroid-v1.safetensors",
+=======
+        "hf_lora": "huggingface.co/prithivMLmods/Flux-Polaroid-Plus/polaroid-plus.safetensors",
+>>>>>>> 22133ac (Fix VHS/Polaroid LoRA: use working HuggingFace repositories)
         "lora_scale": 0.9,
         "prompt_strength": 0.80,
         "guidance_scale": 3.5,
-        "default_prompt": "polaroid style, instant film, soft focus, flash photography, vintage aesthetic",
+        "default_prompt": "Polaroid Plus style, instant film photo, vintage polaroid frame, soft flash photography",
         "output_format": "webp",
         "num_inference_steps": 28,
     },
