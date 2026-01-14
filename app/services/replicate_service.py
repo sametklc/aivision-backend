@@ -935,8 +935,8 @@ class ReplicateService:
                 # Image input - accepts array of image URIs
                 if image_url:
                     inputs["image_input"] = [image_url]
-                # Resolution: 1K, 2K, 4K
-                inputs["resolution"] = kwargs.get("resolution", config.get("resolution", "2K"))
+                # Resolution: "K" (1K), "2K", "4K" - API requires "K" not "1K"!
+                inputs["resolution"] = kwargs.get("resolution", config.get("resolution", "K"))
                 # Aspect ratio - use match_input_image for img2img
                 inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "match_input_image"))
                 # Output format
