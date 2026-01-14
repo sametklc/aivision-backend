@@ -927,6 +927,23 @@ class ReplicateService:
                 inputs["num_inference_steps"] = config.get("num_inference_steps", 28)
                 inputs["output_format"] = config.get("output_format", "webp")
 
+            case "nano_banana_pro":
+                # google/nano-banana-pro - Google DeepMind image generation
+                # Supports image-to-image with up to 14 input images
+                base_prompt = prompt or ""
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style) if base_prompt else "high quality image"
+                # Image input - accepts array of image URIs
+                if image_url:
+                    inputs["image_input"] = [image_url]
+                # Resolution: 1K, 2K, 4K
+                inputs["resolution"] = kwargs.get("resolution", config.get("resolution", "2K"))
+                # Aspect ratio - use match_input_image for img2img
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "match_input_image"))
+                # Output format
+                inputs["output_format"] = config.get("output_format", "jpg")
+                # Safety filter
+                inputs["safety_filter_level"] = config.get("safety_filter_level", "block_only_high")
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -1193,6 +1210,7 @@ class ReplicateService:
             "bg_remix": 10, "sticker_maker": 5, "outpainting": 10,
             "sky_replace": 10, "interior_design": 20, "product_shoot": 15,
             "text_effects": 10, "tattoo_tryon": 10, "style_transfer": 15,
+            "nano_banana_pro": 20,
         }
         return time_estimates.get(tool_id, 15)
 
@@ -1214,6 +1232,7 @@ class ReplicateService:
             "bg_remix": 3, "sticker_maker": 2, "outpainting": 3,
             "sky_replace": 3, "interior_design": 4, "product_shoot": 3,
             "text_effects": 3, "tattoo_tryon": 3, "style_transfer": 4,
+            "nano_banana_pro": 6,  # $0.15 per run
         }
         return costs.get(tool_id, 2)
 

@@ -506,6 +506,22 @@ AI_MODELS = {
         "output_format": "webp",
         "num_inference_steps": 28,
     },
+    # ─────────────────────────────────────────────────────────────────────
+    # GOOGLE DEEPMIND - NANO BANANA PRO
+    # ─────────────────────────────────────────────────────────────────────
+    "nano_banana_pro": {
+        "model": "google/nano-banana-pro",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "Google DeepMind image generation with accurate text rendering and multi-image blending",
+        "cost_per_run": 0.15,  # $0.15 for 1K/2K, $0.30 for 4K
+        "supports": ["image", "prompt"],
+        # Nano Banana Pro params
+        "resolution": "2K",  # 1K, 2K, 4K
+        "aspect_ratio": "match_input_image",  # 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9
+        "output_format": "jpg",  # jpg, png
+        "safety_filter_level": "block_only_high",  # block_low_and_above, block_medium_and_above, block_only_high
+    },
 }
 
 # Tool categories for frontend - All 33 Tools + 1 new
@@ -525,6 +541,6 @@ TOOL_CATEGORIES = {
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
         "product_shoot", "text_effects", "tattoo_tryon", "style_transfer",
         "time_machine", "retro_style", "baby_prediction", "flux_pro", "sd35_large",
-        "vhs_style", "polaroid_style"
+        "vhs_style", "polaroid_style", "nano_banana_pro"
     ]
 }

@@ -375,6 +375,16 @@ TOOL_METADATA = {
         "max_duration": None,
         "example_prompt": "instant film, flash photography, vintage memory",
     },
+    "nano_banana_pro": {
+        "name": "Nano Banana Pro",
+        "description": "Google DeepMind image generation with text rendering",
+        "category": ToolCategory.MAGIC_EDIT,
+        "input_type": "image_text",
+        "supports_styles": True,
+        "supports_aspect_ratio": True,
+        "max_duration": None,
+        "example_prompt": "professional photo, high quality, detailed",
+    },
 }
 
 
