@@ -483,8 +483,8 @@ AI_MODELS = {
         "supports": ["image", "prompt"],
         # LoRA config
         "hf_lora": "huggingface.co/Muapi/vhx-the-flux-vhs-lora/vhx-the-flux-vhs-lora.safetensors",
-        "lora_scale": 1.0,
-        "prompt_strength": 0.85,
+        "lora_scale": 0.7,
+        "prompt_strength": 0.35,
         "guidance_scale": 3.5,
         "default_prompt": "vhx style, VHS tape recording, analog glitch, 1990s footage, noise distortion",
         "output_format": "webp",
@@ -499,8 +499,8 @@ AI_MODELS = {
         "supports": ["image", "prompt"],
         # LoRA config
         "hf_lora": "huggingface.co/prithivMLmods/Flux-Polaroid-Plus/polaroid-plus.safetensors",
-        "lora_scale": 0.9,
-        "prompt_strength": 0.80,
+        "lora_scale": 0.7,
+        "prompt_strength": 0.35,
         "guidance_scale": 3.5,
         "default_prompt": "Polaroid Plus style, instant film photo, vintage polaroid frame, soft flash photography",
         "output_format": "webp",
