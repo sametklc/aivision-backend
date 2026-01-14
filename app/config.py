@@ -441,6 +441,36 @@ AI_MODELS = {
         "width": 512,
         "height": 728,
     },
+    # ─────────────────────────────────────────────────────────────────────
+    # TEXT-TO-IMAGE / IMAGE-TO-IMAGE GENERATORS
+    # ─────────────────────────────────────────────────────────────────────
+    "flux_pro": {
+        "model": "black-forest-labs/flux-1.1-pro",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "FLUX 1.1 Pro - High quality image generation with optional image guidance",
+        "cost_per_run": 0.04,
+        "supports": ["prompt", "image"],  # image_prompt for Redux mode
+        # FLUX 1.1 Pro params
+        "aspect_ratio": "1:1",  # 1:1, 16:9, 9:16, 4:3, 3:4, etc.
+        "output_format": "webp",
+        "output_quality": 90,
+        "safety_tolerance": 2,  # 1=strict, 6=permissive
+        "prompt_upsampling": False,
+    },
+    "sd35_large": {
+        "model": "stability-ai/stable-diffusion-3.5-large",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "Stable Diffusion 3.5 Large - Powerful image-to-image transformation",
+        "cost_per_run": 0.065,
+        "supports": ["prompt", "image", "negative_prompt"],
+        # SD 3.5 Large params
+        "cfg": 5,  # Guidance scale 1-10
+        "prompt_strength": 0.85,  # 0-1, higher = more change from original
+        "aspect_ratio": "1:1",
+        "output_format": "webp",
+    },
 }
 
 # Tool categories for frontend - All 33 Tools + 1 new
@@ -459,6 +489,6 @@ TOOL_CATEGORIES = {
         "magic_eraser", "ai_headshot", "clothes_swap", "bg_remix",
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
         "product_shoot", "text_effects", "tattoo_tryon", "style_transfer",
-        "time_machine", "retro_style", "baby_prediction"
+        "time_machine", "retro_style", "baby_prediction", "flux_pro", "sd35_large"
     ]
 }

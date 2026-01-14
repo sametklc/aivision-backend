@@ -855,6 +855,40 @@ class ReplicateService:
                 inputs["width"] = config.get("width", 512)
                 inputs["height"] = config.get("height", 728)
 
+            case "flux_pro":
+                # black-forest-labs/flux-1.1-pro - High quality generation
+                # Uses "image_prompt" for image-guided generation (Redux mode)
+                inputs["prompt"] = apply_style_to_prompt(prompt or "", style)
+                if image_url:
+                    inputs["image_prompt"] = image_url  # Image guidance (Redux mode)
+                # Aspect ratio
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio") or config.get("aspect_ratio", "1:1")
+                # Output settings
+                inputs["output_format"] = config.get("output_format", "webp")
+                inputs["output_quality"] = config.get("output_quality", 90)
+                # Safety and enhancement
+                inputs["safety_tolerance"] = config.get("safety_tolerance", 2)
+                inputs["prompt_upsampling"] = config.get("prompt_upsampling", False)
+
+            case "sd35_large":
+                # stability-ai/stable-diffusion-3.5-large - Powerful img2img
+                inputs["prompt"] = apply_style_to_prompt(prompt or "", style)
+                if image_url:
+                    inputs["image"] = image_url  # Input image for img2img
+                    # Prompt strength: 0-1, higher = more change from original
+                    inputs["prompt_strength"] = config.get("prompt_strength", 0.85)
+                # Negative prompt support
+                negative_prompt = kwargs.get("negative_prompt", "")
+                if negative_prompt:
+                    inputs["negative_prompt"] = negative_prompt
+                # Guidance scale (cfg)
+                inputs["cfg"] = config.get("cfg", 5)
+                # Aspect ratio (ignored if image provided)
+                if not image_url:
+                    inputs["aspect_ratio"] = kwargs.get("aspect_ratio") or config.get("aspect_ratio", "1:1")
+                # Output format
+                inputs["output_format"] = config.get("output_format", "webp")
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
