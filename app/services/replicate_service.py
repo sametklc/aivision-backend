@@ -930,7 +930,11 @@ class ReplicateService:
             case "veo_3_fast":
                 # google/veo-3-fast - Google Veo 3 Fast video generation
                 # Supports both text-to-video and image-to-video
-                inputs["prompt"] = apply_style_to_prompt(prompt, style) if prompt else config.get("default_prompt", "cinematic video")
+                default_prompt = config.get("default_prompt", "cinematic video, smooth motion, high quality")
+                if prompt and prompt.strip():
+                    inputs["prompt"] = apply_style_to_prompt(prompt.strip(), style)
+                else:
+                    inputs["prompt"] = default_prompt
                 # Image input for image-to-video mode (optional)
                 if image_url:
                     inputs["image"] = image_url
