@@ -534,6 +534,31 @@ class ReplicateService:
                 # Aspect ratio: 16:9, 9:16, 1:1
                 inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "9:16"))
 
+            case "veo_3_fast":
+                # google/veo-3-fast - Google Veo 3 Fast video generation
+                # Supports both text-to-video and image-to-video
+                default_prompt = config.get("default_prompt", "cinematic video, smooth motion, high quality")
+                base_prompt = prompt.strip() if prompt and prompt.strip() else default_prompt
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                # Image input for image-to-video mode (optional)
+                if image_url:
+                    inputs["image"] = image_url
+                # Resolution: 720p or 1080p
+                inputs["resolution"] = config.get("resolution", "720p")
+                # Duration: 4, 6, or 8 seconds
+                duration = kwargs.get("duration", config.get("duration", 8))
+                inputs["duration"] = duration if duration in [4, 6, 8] else 8
+                # Aspect ratio: 16:9 or 9:16
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "9:16"))
+                # Generate audio: True or False
+                inputs["generate_audio"] = config.get("generate_audio", False)
+                # Optional: negative prompt
+                if kwargs.get("negative_prompt"):
+                    inputs["negative_prompt"] = kwargs.get("negative_prompt")
+                # Optional: seed for reproducibility
+                if kwargs.get("seed"):
+                    inputs["seed"] = kwargs.get("seed")
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -926,32 +951,6 @@ class ReplicateService:
                 inputs["guidance"] = config.get("guidance_scale", 3.5)
                 inputs["num_inference_steps"] = config.get("num_inference_steps", 28)
                 inputs["output_format"] = config.get("output_format", "webp")
-
-            case "veo_3_fast":
-                # google/veo-3-fast - Google Veo 3 Fast video generation
-                # Supports both text-to-video and image-to-video
-                default_prompt = config.get("default_prompt", "cinematic video, smooth motion, high quality")
-                if prompt and prompt.strip():
-                    inputs["prompt"] = apply_style_to_prompt(prompt.strip(), style)
-                else:
-                    inputs["prompt"] = default_prompt
-                # Image input for image-to-video mode (optional)
-                if image_url:
-                    inputs["image"] = image_url
-                # Resolution: 720p or 1080p
-                inputs["resolution"] = config.get("resolution", "720p")
-                # Duration: 4, 6, or 8 seconds
-                inputs["duration"] = kwargs.get("duration", config.get("duration", 8))
-                # Aspect ratio: 16:9 or 9:16
-                inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "16:9"))
-                # Generate audio: True or False
-                inputs["generate_audio"] = config.get("generate_audio", False)
-                # Optional: negative prompt
-                if kwargs.get("negative_prompt"):
-                    inputs["negative_prompt"] = kwargs.get("negative_prompt")
-                # Optional: seed for reproducibility
-                if kwargs.get("seed"):
-                    inputs["seed"] = kwargs.get("seed")
 
             case "nano_banana_pro":
                 # google/nano-banana-pro - Google DeepMind image generation
