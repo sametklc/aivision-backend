@@ -507,6 +507,24 @@ AI_MODELS = {
         "num_inference_steps": 28,
     },
     # ─────────────────────────────────────────────────────────────────────
+    # GOOGLE VEO 3 FAST - Text-to-Video & Image-to-Video
+    # ─────────────────────────────────────────────────────────────────────
+    "veo_3_fast": {
+        "model": "google/veo-3-fast",
+        "version": None,  # Use latest
+        "category": "video",
+        "description": "Google Veo 3 Fast - High quality video generation from text or image",
+        "cost_per_run": 0.25,
+        "supports": ["prompt", "image"],  # Both text-to-video and image-to-video
+        "output_type": "video",
+        # Veo 3 params - User requested 720p and no audio
+        "resolution": "720p",  # 720p or 1080p
+        "duration": 8,  # 4, 6, or 8 seconds
+        "aspect_ratio": "16:9",  # 16:9 or 9:16
+        "generate_audio": False,  # Silent videos as requested
+        "default_prompt": "cinematic video, smooth motion, high quality",
+    },
+    # ─────────────────────────────────────────────────────────────────────
     # GOOGLE DEEPMIND - NANO BANANA PRO
     # ─────────────────────────────────────────────────────────────────────
     "nano_banana_pro": {
@@ -529,7 +547,8 @@ TOOL_CATEGORIES = {
     "VIDEO_AI": [
         "ai_hug", "image_to_video", "kling_video", "text_to_video", "talking_head",
         "video_expand", "style_transfer_video", "super_slowmo",
-        "video_upscale", "video_bg_remove", "face_swap_video", "script_to_video"
+        "video_upscale", "video_bg_remove", "face_swap_video", "script_to_video",
+        "veo_3_fast"
     ],
     "PHOTO_ENHANCE": [
         "face_clarify", "old_photo_restore", "colorize", "4k_upscale",

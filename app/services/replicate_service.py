@@ -927,6 +927,28 @@ class ReplicateService:
                 inputs["num_inference_steps"] = config.get("num_inference_steps", 28)
                 inputs["output_format"] = config.get("output_format", "webp")
 
+            case "veo_3_fast":
+                # google/veo-3-fast - Google Veo 3 Fast video generation
+                # Supports both text-to-video and image-to-video
+                inputs["prompt"] = apply_style_to_prompt(prompt, style) if prompt else config.get("default_prompt", "cinematic video")
+                # Image input for image-to-video mode (optional)
+                if image_url:
+                    inputs["image"] = image_url
+                # Resolution: 720p or 1080p
+                inputs["resolution"] = config.get("resolution", "720p")
+                # Duration: 4, 6, or 8 seconds
+                inputs["duration"] = kwargs.get("duration", config.get("duration", 8))
+                # Aspect ratio: 16:9 or 9:16
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "16:9"))
+                # Generate audio: True or False
+                inputs["generate_audio"] = config.get("generate_audio", False)
+                # Optional: negative prompt
+                if kwargs.get("negative_prompt"):
+                    inputs["negative_prompt"] = kwargs.get("negative_prompt")
+                # Optional: seed for reproducibility
+                if kwargs.get("seed"):
+                    inputs["seed"] = kwargs.get("seed")
+
             case "nano_banana_pro":
                 # google/nano-banana-pro - Google DeepMind image generation
                 # Supports image-to-image with up to 14 input images
