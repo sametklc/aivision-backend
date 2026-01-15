@@ -520,7 +520,7 @@ AI_MODELS = {
         # Veo 3 params - User requested 720p and no audio
         "resolution": "720p",  # 720p or 1080p
         "duration": 8,  # 4, 6, or 8 seconds
-        "aspect_ratio": "16:9",  # 16:9 or 9:16
+        "aspect_ratio": "9:16",  # 9:16 (vertical) or 16:9 (horizontal)
         "generate_audio": False,  # Silent videos as requested
         "default_prompt": "cinematic video, smooth motion, high quality",
     },
