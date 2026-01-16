@@ -113,10 +113,25 @@ async def process_job(job_id: str, tool_id: str, input_params: Dict[str, Any]):
         jobs_store[job_id]["status"] = JobStatus.PROCESSING
         logger.info(f"Processing job {job_id} for tool {tool_id}")
 
-        success, result, _ = await replicate_service.run_prediction(tool_id, input_params)
+        success, result, client_processing = await replicate_service.run_prediction(tool_id, input_params)
 
         if success:
             jobs_store[job_id]["status"] = JobStatus.COMPLETED
+
+            # Handle client-side processing (e.g., portrait_mode blur_background)
+            if client_processing == "blur_background":
+                # Store both the cutout URL and original URL for client-side composite
+                if isinstance(result, dict):
+                    result["original_url"] = input_params.get("image_url")
+                    result["blur_background"] = True
+                else:
+                    # Result is just a URL string, convert to dict
+                    result = {
+                        "url": result,
+                        "original_url": input_params.get("image_url"),
+                        "blur_background": True
+                    }
+
             jobs_store[job_id]["result"] = result
             jobs_store[job_id]["completed_at"] = datetime.utcnow()
             logger.info(f"Job {job_id} completed successfully")
@@ -157,12 +172,18 @@ async def get_job_status(job_id: str):
     # Build metadata with tool_id and any extra result data
     metadata = {"tool_id": job["tool_id"]}
 
-    # Add extra fields from result for video stitching on client
+    # Add extra fields from result for client-side processing
     if job["result"] and isinstance(job["result"], dict):
+        # Video stitching
         if job["result"].get("stitch_on_client"):
             metadata["stitch_on_client"] = True
             metadata["original_url"] = job["result"].get("original_url")
             metadata["continuation_url"] = job["result"].get("continuation_url")
+
+        # Portrait mode blur_background (bokeh effect)
+        if job["result"].get("blur_background"):
+            metadata["blur_background"] = True
+            metadata["original_url"] = job["result"].get("original_url")
 
     return JobStatusResponse(
         job_id=job_id,
