@@ -783,7 +783,8 @@ class ReplicateService:
             case "clothes_swap":
                 # cuuupid/idm-vton - Virtual try-on with garment category
                 # Requires: human photo + garment photo + category
-                garment_url = kwargs.get("garment_image_url") or kwargs.get("image2_url")
+                # Frontend sends as image_url_2
+                garment_url = kwargs.get("image_url_2") or kwargs.get("garment_image_url") or kwargs.get("image2_url")
                 if not image_url:
                     raise ValueError("Clothes Swap requires a human/model photo")
                 if not garment_url:
