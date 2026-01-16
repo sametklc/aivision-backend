@@ -545,9 +545,9 @@ class ReplicateService:
                     inputs["image"] = image_url
                 # Resolution: 720p or 1080p
                 inputs["resolution"] = config.get("resolution", "720p")
-                # Duration: 4, 6, or 8 seconds
-                duration = kwargs.get("duration", config.get("duration", 8))
-                inputs["duration"] = duration if duration in [4, 6, 8] else 8
+                # Duration: 4, 6, or 8 seconds (4 = cheapest, ~$0.04 vs $0.08 for 8s)
+                duration = kwargs.get("duration", config.get("duration", 4))
+                inputs["duration"] = duration if duration in [4, 6, 8] else 4
                 # Aspect ratio: 16:9 or 9:16
                 inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "9:16"))
                 # Generate audio: True or False
