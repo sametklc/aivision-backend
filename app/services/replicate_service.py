@@ -559,6 +559,26 @@ class ReplicateService:
                 if kwargs.get("seed"):
                     inputs["seed"] = kwargs.get("seed")
 
+            case "kling_v26":
+                # kwaivgi/kling-v2.6 - Kling v2.6 video generation
+                # Supports both text-to-video and image-to-video
+                default_prompt = config.get("default_prompt", "cinematic video, smooth motion, high quality")
+                base_prompt = prompt.strip() if prompt and prompt.strip() else default_prompt
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                # Image input for image-to-video mode (optional)
+                if image_url:
+                    inputs["start_image"] = image_url  # Kling uses start_image
+                # Duration: 5 or 10 seconds
+                duration = kwargs.get("duration", config.get("duration", 5))
+                inputs["duration"] = 5 if duration <= 5 else 10
+                # Aspect ratio: 16:9, 9:16, 1:1 (ignored if start_image provided)
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio", config.get("aspect_ratio", "9:16"))
+                # Generate audio: True or False
+                inputs["generate_audio"] = config.get("generate_audio", False)
+                # Optional: negative prompt
+                if kwargs.get("negative_prompt"):
+                    inputs["negative_prompt"] = kwargs.get("negative_prompt")
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════

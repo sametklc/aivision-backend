@@ -507,6 +507,23 @@ AI_MODELS = {
         "num_inference_steps": 28,
     },
     # ─────────────────────────────────────────────────────────────────────
+    # KLING V2.6 - High Quality Video Generation
+    # ─────────────────────────────────────────────────────────────────────
+    "kling_v26": {
+        "model": "kwaivgi/kling-v2.6",
+        "version": None,  # Use latest
+        "category": "video",
+        "description": "Kling v2.6 - High quality video generation with optional audio",
+        "cost_per_run": 0.35,
+        "supports": ["prompt", "image"],  # Both text-to-video and image-to-video
+        "output_type": "video",
+        # Kling v2.6 params - User requested 5s, 9:16, silent
+        "duration": 5,  # 5 or 10 seconds
+        "aspect_ratio": "9:16",  # 16:9, 9:16, 1:1
+        "generate_audio": False,  # Silent videos
+        "default_prompt": "cinematic video, smooth motion, high quality",
+    },
+    # ─────────────────────────────────────────────────────────────────────
     # GOOGLE VEO 3 FAST - Text-to-Video & Image-to-Video
     # ─────────────────────────────────────────────────────────────────────
     "veo_3_fast": {
@@ -548,7 +565,7 @@ TOOL_CATEGORIES = {
         "ai_hug", "image_to_video", "kling_video", "text_to_video", "talking_head",
         "video_expand", "style_transfer_video", "super_slowmo",
         "video_upscale", "video_bg_remove", "face_swap_video", "script_to_video",
-        "veo_3_fast"
+        "veo_3_fast", "kling_v26"
     ],
     "PHOTO_ENHANCE": [
         "face_clarify", "old_photo_restore", "colorize", "4k_upscale",
