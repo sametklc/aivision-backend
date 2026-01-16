@@ -781,13 +781,26 @@ class ReplicateService:
                 inputs["style_strength_ratio"] = 20
 
             case "clothes_swap":
-                # cuuupid/idm-vton (verified hash)
+                # cuuupid/idm-vton - Virtual try-on with garment category
+                # Requires: human photo + garment photo + category
+                garment_url = kwargs.get("garment_image_url") or kwargs.get("image2_url")
+                if not image_url:
+                    raise ValueError("Clothes Swap requires a human/model photo")
+                if not garment_url:
+                    raise ValueError("Clothes Swap requires a garment photo")
+
                 inputs["human_img"] = image_url
-                inputs["garm_img"] = kwargs.get("garment_image_url")
+                inputs["garm_img"] = garment_url
                 inputs["garment_des"] = prompt or "clothing item"
+                # Category: "upper_body", "lower_body", "dresses"
+                category = kwargs.get("garment_category", "upper_body")
+                if category not in ["upper_body", "lower_body", "dresses"]:
+                    category = "upper_body"
+                inputs["category"] = category
                 inputs["is_checked"] = True
                 inputs["is_checked_crop"] = False
                 inputs["denoise_steps"] = 30
+                inputs["seed"] = kwargs.get("seed", 42)
 
             case "bg_remix" | "outpainting" | "sky_replace" | "tattoo_tryon":
                 # black-forest-labs/flux-fill-schnell (inpainting)
