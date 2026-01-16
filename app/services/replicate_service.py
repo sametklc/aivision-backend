@@ -798,9 +798,8 @@ class ReplicateService:
                 if category not in ["upper_body", "lower_body", "dresses"]:
                     category = "upper_body"
                 inputs["category"] = category
-                inputs["is_checked"] = True
-                inputs["is_checked_crop"] = False
-                inputs["denoise_steps"] = 30
+                inputs["crop"] = True  # Auto-crop if image is not 3:4 ratio
+                inputs["steps"] = 30
                 inputs["seed"] = kwargs.get("seed", 42)
 
             case "bg_remix" | "outpainting" | "sky_replace" | "tattoo_tryon":
