@@ -465,29 +465,6 @@ class ReplicateService:
                 inputs["num_inference_steps"] = 15
                 inputs["guidance_scale"] = 7.5
 
-            case "super_slowmo":
-                # zsxkib/st-mfnet - ST-MFNet frame interpolation (GAN-based)
-                # Supports up to 32x interpolation with better texture preservation
-                video_url = kwargs.get("video_url")
-                if not video_url:
-                    raise ValueError("Super Slow-Mo requires a video input")
-                inputs["mp4"] = video_url
-                # framerate_multiplier: 2, 4, 8, 16, 32
-                speed_factor = int(kwargs.get("speed_factor", kwargs.get("times_to_interpolate", 4)))
-                inputs["framerate_multiplier"] = speed_factor
-                # CRITICAL: keep_original_duration=False for actual slow motion
-                # If True: just smoother video at higher fps (real-time)
-                # If False: time is stretched = true slow motion effect
-                inputs["keep_original_duration"] = False
-                inputs["custom_fps"] = 30  # Output plays at normal 30fps
-
-            case "video_upscale":
-                # lucataco/real-esrgan-video (verified hash)
-                # Params: video_path, resolution (FHD/2k/4k), model
-                inputs["video_path"] = kwargs.get("video_url")
-                inputs["resolution"] = kwargs.get("resolution", "2k")  # FHD, 2k, 4k
-                inputs["model"] = "RealESRGAN_x4plus"  # Best general quality
-
             case "video_bg_remove":
                 # arielreplicate/robust_video_matting (verified hash)
                 video_url = kwargs.get("video_url")
@@ -1006,6 +983,32 @@ class ReplicateService:
                 # Safety filter
                 inputs["safety_filter_level"] = config.get("safety_filter_level", "block_only_high")
 
+            case "text_to_image":
+                # black-forest-labs/flux-1.1-pro - Text to image generation
+                base_prompt = prompt or "a beautiful image"
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                # Aspect ratio
+                inputs["aspect_ratio"] = kwargs.get("aspect_ratio") or config.get("aspect_ratio", "1:1")
+                # Output settings
+                inputs["output_format"] = config.get("output_format", "webp")
+                inputs["output_quality"] = config.get("output_quality", 90)
+                # Safety and enhancement
+                inputs["safety_tolerance"] = config.get("safety_tolerance", 2)
+                inputs["prompt_upsampling"] = config.get("prompt_upsampling", True)
+
+            case "image_to_image":
+                # black-forest-labs/flux-dev - Image to image transformation
+                if not image_url:
+                    raise ValueError("Image to Image requires an input image")
+                inputs["image"] = image_url
+                base_prompt = prompt or "transform the image, high quality"
+                inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
+                # FLUX Dev params
+                inputs["guidance"] = config.get("guidance", 3.5)
+                inputs["num_inference_steps"] = config.get("num_inference_steps", 28)
+                inputs["prompt_strength"] = kwargs.get("prompt_strength") or config.get("prompt_strength", 0.8)
+                inputs["output_format"] = config.get("output_format", "webp")
+
         return inputs
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -1260,7 +1263,7 @@ class ReplicateService:
             # VIDEO AI
             "ai_hug": 45, "image_to_video": 45, "text_to_video": 60,
             "talking_head": 30, "video_expand": 45, "style_transfer_video": 40,
-            "super_slowmo": 20, "video_upscale": 60, "video_bg_remove": 40,
+            "video_bg_remove": 40,
             "face_swap_video": 45, "script_to_video": 60,
             # PHOTO ENHANCE
             "face_clarify": 8, "old_photo_restore": 20, "colorize": 15,
@@ -1282,7 +1285,7 @@ class ReplicateService:
             # VIDEO AI
             "ai_hug": 8, "image_to_video": 8, "text_to_video": 10,
             "talking_head": 6, "video_expand": 8, "style_transfer_video": 8,
-            "super_slowmo": 4, "video_upscale": 8, "video_bg_remove": 6,
+            "video_bg_remove": 6,
             "face_swap_video": 8, "script_to_video": 10,
             # PHOTO ENHANCE
             "face_clarify": 2, "old_photo_restore": 3, "colorize": 2,
@@ -1295,6 +1298,8 @@ class ReplicateService:
             "sky_replace": 3, "interior_design": 4, "product_shoot": 3,
             "text_effects": 3, "tattoo_tryon": 3, "style_transfer": 4,
             "nano_banana_pro": 6,  # $0.15 per run
+            # TEXT-TO-IMAGE / IMAGE-TO-IMAGE
+            "text_to_image": 15, "image_to_image": 15,
         }
         return costs.get(tool_id, 2)
 

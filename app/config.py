@@ -109,7 +109,7 @@ AI_MODELS = {
         "version": None,  # Use latest
         "category": "video",
         "description": "High-quality video generation with Kling 1.6 Pro",
-        "cost_per_run": 0.35,
+        "cost_per_run": 0.50,
         "supports": ["image", "prompt", "duration"],
         # Kling params
         "duration": 5,  # 5 or 10 seconds
@@ -132,7 +132,7 @@ AI_MODELS = {
         "version": "85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b",
         "category": "video",
         "description": "Make your photo talk with text or audio",
-        "cost_per_run": 0.20,  # TTS + SadTalker combined
+        "cost_per_run": 0.35,  # TTS + SadTalker combined
         "supports": ["image", "text", "audio"],
         "tts_model": "resemble-ai/chatterbox",
         "tts_version": "1b8422bc49635c20d0a84e387ed20879c0dd09254ecdb4e75dc4bec10ff94e97",
@@ -142,7 +142,7 @@ AI_MODELS = {
         "version": None,
         "category": "video",
         "description": "Extend video with AI imagination",
-        "cost_per_run": 0.35,  # ~$0.07/sec for 5 sec
+        "cost_per_run": 0.50,
         "supports": ["video", "prompt"],
         "note": "Uses Kling v2.5 for prompt-guided video continuation with new content generation",
         "default_prompt": "Continue the video smoothly with cinematic motion",
@@ -155,22 +155,6 @@ AI_MODELS = {
         "description": "Apply artistic styles to videos",
         "cost_per_run": 0.10,
         "supports": ["video", "style", "prompt"],
-    },
-    "super_slowmo": {
-        "model": "zsxkib/st-mfnet",
-        "version": "faa7693430b0a4ac95d1b8e25165673c1d7a7263537a7c4bb9be82a3e2d130fb",
-        "category": "video",
-        "description": "Create cinematic slow motion with ST-MFNet (up to 32x)",
-        "cost_per_run": 0.08,
-        "supports": ["video"],
-    },
-    "video_upscale": {
-        "model": "lucataco/real-esrgan-video",
-        "version": "3e56ce4b57863bd03048b42bc09bdd4db20d427cca5fde9d8ae4dc60e1bb4775",
-        "category": "video",
-        "description": "Enhance video to 4K quality",
-        "cost_per_run": 0.10,
-        "supports": ["video", "scale"],
     },
     "video_bg_remove": {
         "model": "arielreplicate/robust_video_matting",
@@ -185,7 +169,7 @@ AI_MODELS = {
         "version": "11b6bf0f4e14d808f655e87e5448233cceff10a45f659d71539cafb7163b2e84",
         "category": "video",
         "description": "Swap faces in videos (Roop)",
-        "cost_per_run": 0.12,
+        "cost_per_run": 0.15,
         "supports": ["video", "image"],
     },
     "script_to_video": {
@@ -205,7 +189,7 @@ AI_MODELS = {
         "version": "0fbacf7afc6c144e5be9767cff80f25aff23e52b0708f17e20f9879b2f21516c",
         "category": "photo_enhance",
         "description": "Restore face details in photos",
-        "cost_per_run": 0.003,
+        "cost_per_run": 0.10,
         "supports": ["image"],
     },
     "old_photo_restore": {
@@ -213,7 +197,7 @@ AI_MODELS = {
         "version": "c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799",
         "category": "photo_enhance",
         "description": "Bring old memories back to life",
-        "cost_per_run": 0.005,
+        "cost_per_run": 0.10,
         "supports": ["image"],
     },
     "colorize": {
@@ -221,7 +205,7 @@ AI_MODELS = {
         "version": "0da600fab0c45a66211339f1c16b71345d22f26ef5fea3dca1bb90bb5711e950",
         "category": "photo_enhance",
         "description": "Add color to B&W photos",
-        "cost_per_run": 0.005,
+        "cost_per_run": 0.10,
         "supports": ["image"],
     },
     "4k_upscale": {
@@ -229,7 +213,7 @@ AI_MODELS = {
         "version": "ede69f6a5ae7d09f769d683347325b08d2f83a93d136ed89747941205e0a71da",
         "category": "photo_enhance",
         "description": "Enhance images to 4K resolution",
-        "cost_per_run": 0.05,
+        "cost_per_run": 0.10,
         "supports": ["image", "scale"],
     },
     "relight": {
@@ -237,7 +221,7 @@ AI_MODELS = {
         "version": "d41bcb10d8c159868f4cfbd7c6a2ca01484f7d39e4613419d5952c61562f1ba7",
         "category": "photo_enhance",
         "description": "Change lighting in photos",
-        "cost_per_run": 0.008,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         "default_prompt": "soft natural lighting, professional photo",
     },
@@ -246,7 +230,7 @@ AI_MODELS = {
         "version": "018241a6c880319404eaa2714b764313e27e11f950a7ff0a7b5b37b27b74dcf7",
         "category": "photo_enhance",
         "description": "Brighten dark photos naturally",
-        "cost_per_run": 0.024,
+        "cost_per_run": 0.10,
         "supports": ["image"],
     },
     "scratch_remover": {
@@ -254,7 +238,7 @@ AI_MODELS = {
         "version": "c75db81db6cbd809d93cc3b7e7a088a351a3349c9fa02b6d393e35e0d51ba799",
         "category": "photo_enhance",
         "description": "Remove scratches and damage",
-        "cost_per_run": 0.005,
+        "cost_per_run": 0.10,
         "supports": ["image"],
     },
     "denoise": {
@@ -262,7 +246,7 @@ AI_MODELS = {
         "version": "cc4956dd26fa5a7185d5660cc9100fab1b8070a1d1654a8bb5eb6d443b020bb2",
         "category": "photo_enhance",
         "description": "Remove noise and grain",
-        "cost_per_run": 0.005,
+        "cost_per_run": 0.10,
         "supports": ["image"],
     },
     "anime_yourself": {
@@ -270,7 +254,7 @@ AI_MODELS = {
         "version": "f0eba373c70464e12e48defa5520bef59f727018779afb9c5b6bddb80523a8f7",
         "category": "photo_enhance",
         "description": "Transform into anime style",
-        "cost_per_run": 0.008,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         "default_prompt": "anime style portrait, beautiful detailed anime art, vibrant colors, masterpiece",
     },
@@ -279,7 +263,7 @@ AI_MODELS = {
         "version": "95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1",
         "category": "photo_enhance",
         "description": "Add professional bokeh effect",
-        "cost_per_run": 0.0004,
+        "cost_per_run": 0.10,
         "supports": ["image"],
         "client_side_processing": "blur_background",
     },
@@ -288,7 +272,7 @@ AI_MODELS = {
         "version": None,  # Use latest version
         "category": "photo_enhance",
         "description": "Professional color grading",
-        "cost_per_run": 0.005,
+        "cost_per_run": 0.10,
         "supports": ["image"],
     },
 
@@ -300,7 +284,7 @@ AI_MODELS = {
         "version": "893e924eecc119a0c5fbfa5d98401118dcbf0662574eb8d2c01be5749756cbd4",
         "category": "magic_edit",
         "description": "Remove unwanted objects",
-        "cost_per_run": 0.003,
+        "cost_per_run": 0.10,
         "supports": ["image", "mask"],
     },
     "ai_headshot": {
@@ -308,7 +292,7 @@ AI_MODELS = {
         "version": "ddfc2b08d209f9fa8c1eca692712918bd449f695dabb4a958da31802a9570fe4",
         "category": "magic_edit",
         "description": "Professional headshots instantly",
-        "cost_per_run": 0.015,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         "default_prompt": "professional headshot portrait, studio lighting, business photo, high quality, sharp focus",
     },
@@ -317,7 +301,7 @@ AI_MODELS = {
         "version": "0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985",
         "category": "magic_edit",
         "description": "Try on different outfits",
-        "cost_per_run": 0.015,
+        "cost_per_run": 0.10,
         "supports": ["image", "garment_image"],
     },
     "bg_remix": {
@@ -325,7 +309,7 @@ AI_MODELS = {
         "version": None,
         "category": "magic_edit",
         "description": "Change background creatively",
-        "cost_per_run": 0.003,
+        "cost_per_run": 0.10,
         "supports": ["image", "mask", "prompt"],
     },
     "sticker_maker": {
@@ -333,7 +317,7 @@ AI_MODELS = {
         "version": "95fcc2a26d3899cd6c2691c900465aaeff466285a65c14638cc5f36f34befaf1",
         "category": "magic_edit",
         "description": "Create custom stickers",
-        "cost_per_run": 0.0004,
+        "cost_per_run": 0.10,
         "supports": ["image"],
         "client_side_processing": "add_outline",
     },
@@ -342,7 +326,7 @@ AI_MODELS = {
         "version": None,
         "category": "magic_edit",
         "description": "Expand image boundaries",
-        "cost_per_run": 0.003,
+        "cost_per_run": 0.10,
         "supports": ["image", "mask", "prompt"],
     },
     "sky_replace": {
@@ -350,7 +334,7 @@ AI_MODELS = {
         "version": None,
         "category": "magic_edit",
         "description": "Change sky in photos",
-        "cost_per_run": 0.003,
+        "cost_per_run": 0.10,
         "supports": ["image", "mask", "prompt"],
         "default_prompt": "beautiful dramatic sky, sunset clouds, golden hour, vibrant colors",
     },
@@ -359,7 +343,7 @@ AI_MODELS = {
         "version": "76604baddc85b1b4616e1c6475eca080da339c8875bd4996705440484a6eac38",
         "category": "magic_edit",
         "description": "Redesign room interiors",
-        "cost_per_run": 0.012,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         "default_prompt": "modern interior design, stylish furniture, professional photography",
     },
@@ -368,7 +352,7 @@ AI_MODELS = {
         "version": "d41bcb10d8c159868f4cfbd7c6a2ca01484f7d39e4613419d5952c61562f1ba7",
         "category": "magic_edit",
         "description": "Professional product photos",
-        "cost_per_run": 0.008,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         "default_prompt": "professional product photography, studio lighting, white background, commercial quality",
     },
@@ -377,7 +361,7 @@ AI_MODELS = {
         "version": "aff48af9c68d162388d230a2ab003f68d2638d88307bdaf1c2f1ac95079c9613",
         "category": "magic_edit",
         "description": "Add stylish text overlays",
-        "cost_per_run": 0.005,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
     },
     "tattoo_tryon": {
@@ -385,7 +369,7 @@ AI_MODELS = {
         "version": None,
         "category": "magic_edit",
         "description": "Preview tattoos on your body",
-        "cost_per_run": 0.003,
+        "cost_per_run": 0.10,
         "supports": ["image", "mask", "prompt"],
     },
     # ─────────────────────────────────────────────────────────────────────
@@ -396,7 +380,7 @@ AI_MODELS = {
         "version": "8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b",
         "category": "magic_edit",
         "description": "See yourself at different ages - past or future",
-        "cost_per_run": 0.03,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         "default_prompt": "professional portrait photo, high quality, detailed face",
         # TUNED for drastic transformations (aging/de-aging)
@@ -410,7 +394,7 @@ AI_MODELS = {
         "version": None,  # Use latest
         "category": "magic_edit",
         "description": "Retro & Polaroid aesthetic transformations",
-        "cost_per_run": 0.02,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         "default_prompt": "vintage polaroid photo, retro aesthetic, film grain, warm faded colors",
         # SDXL img2img params - preserves full composition
@@ -423,7 +407,7 @@ AI_MODELS = {
         "version": "f1023890703bc0a5a3a2c21b5e498833be5f6ef6e70e9daf6b9b3a4fd8309cf0",
         "category": "magic_edit",
         "description": "Apply artistic styles to photos",
-        "cost_per_run": 0.01,
+        "cost_per_run": 0.10,
         "supports": ["image", "style"],
         # Optimized params for face preservation
         "structure_denoising_strength": 0.5,  # Lower = better face preservation (0.5 ideal)
@@ -434,7 +418,7 @@ AI_MODELS = {
         "version": "ba5ab694a9df055fa469e55eeab162cc288039da0abd8b19d956980cc3b49f6d",
         "category": "magic_edit",
         "description": "Predict what your baby would look like",
-        "cost_per_run": 0.01,
+        "cost_per_run": 0.10,
         "supports": ["image", "image2", "gender"],
         # Baby-Mystic params
         "steps": 25,
@@ -444,12 +428,39 @@ AI_MODELS = {
     # ─────────────────────────────────────────────────────────────────────
     # TEXT-TO-IMAGE / IMAGE-TO-IMAGE GENERATORS
     # ─────────────────────────────────────────────────────────────────────
+    "text_to_image": {
+        "model": "black-forest-labs/flux-1.1-pro",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "Generate images from text prompts with FLUX 1.1 Pro",
+        "cost_per_run": 0.04,  # ~15 credits
+        "supports": ["prompt"],
+        # FLUX 1.1 Pro params
+        "aspect_ratio": "1:1",
+        "output_format": "webp",
+        "output_quality": 90,
+        "safety_tolerance": 2,
+        "prompt_upsampling": True,
+    },
+    "image_to_image": {
+        "model": "black-forest-labs/flux-dev",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "Transform images with AI using FLUX Dev",
+        "cost_per_run": 0.04,  # ~15 credits
+        "supports": ["image", "prompt"],
+        # FLUX Dev params
+        "guidance": 3.5,
+        "num_inference_steps": 28,
+        "prompt_strength": 0.8,
+        "output_format": "webp",
+    },
     "flux_pro": {
         "model": "black-forest-labs/flux-1.1-pro",
         "version": None,  # Use latest
         "category": "magic_edit",
         "description": "FLUX 1.1 Pro - High quality image generation with optional image guidance",
-        "cost_per_run": 0.04,
+        "cost_per_run": 0.10,
         "supports": ["prompt", "image"],  # image_prompt for Redux mode
         # FLUX 1.1 Pro params
         "aspect_ratio": "1:1",  # 1:1, 16:9, 9:16, 4:3, 3:4, etc.
@@ -463,7 +474,7 @@ AI_MODELS = {
         "version": None,  # Use latest
         "category": "magic_edit",
         "description": "Stable Diffusion 3.5 Large - Powerful image-to-image transformation",
-        "cost_per_run": 0.065,
+        "cost_per_run": 0.10,
         "supports": ["prompt", "image", "negative_prompt"],
         # SD 3.5 Large params
         "cfg": 5,  # Guidance scale 1-10
@@ -479,7 +490,7 @@ AI_MODELS = {
         "version": None,  # Use latest
         "category": "magic_edit",
         "description": "VHS retro effect - 90s analog glitch aesthetic",
-        "cost_per_run": 0.032,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         # LoRA config
         "hf_lora": "huggingface.co/Muapi/vhx-the-flux-vhs-lora/vhx-the-flux-vhs-lora.safetensors",
@@ -495,7 +506,7 @@ AI_MODELS = {
         "version": None,  # Use latest
         "category": "magic_edit",
         "description": "Polaroid instant film - vintage flash photography aesthetic",
-        "cost_per_run": 0.032,
+        "cost_per_run": 0.10,
         "supports": ["image", "prompt"],
         # LoRA config
         "hf_lora": "huggingface.co/prithivMLmods/Flux-Polaroid-Plus/polaroid-plus.safetensors",
@@ -514,7 +525,7 @@ AI_MODELS = {
         "version": None,  # Use latest
         "category": "video",
         "description": "Kling v2.6 - High quality video generation with optional audio",
-        "cost_per_run": 0.35,
+        "cost_per_run": 0.50,
         "supports": ["prompt", "image"],  # Both text-to-video and image-to-video
         "output_type": "video",
         # Kling v2.6 params - User requested 5s, 9:16, silent
@@ -531,7 +542,7 @@ AI_MODELS = {
         "version": None,  # Use latest
         "category": "video",
         "description": "Google Veo 3 Fast - High quality video generation from text or image",
-        "cost_per_run": 0.25,
+        "cost_per_run": 0.50,
         "supports": ["prompt", "image"],  # Both text-to-video and image-to-video
         "output_type": "video",
         # Veo 3 params - User requested 720p and no audio
@@ -563,9 +574,8 @@ AI_MODELS = {
 TOOL_CATEGORIES = {
     "VIDEO_AI": [
         "ai_hug", "image_to_video", "kling_video", "text_to_video", "talking_head",
-        "video_expand", "style_transfer_video", "super_slowmo",
-        "video_upscale", "video_bg_remove", "face_swap_video", "script_to_video",
-        "veo_3_fast", "kling_v26"
+        "video_expand", "style_transfer_video", "video_bg_remove", "face_swap_video",
+        "script_to_video", "veo_3_fast", "kling_v26"
     ],
     "PHOTO_ENHANCE": [
         "face_clarify", "old_photo_restore", "colorize", "4k_upscale",
@@ -577,6 +587,6 @@ TOOL_CATEGORIES = {
         "sticker_maker", "outpainting", "sky_replace", "interior_design",
         "product_shoot", "text_effects", "tattoo_tryon", "style_transfer",
         "time_machine", "retro_style", "baby_prediction", "flux_pro", "sd35_large",
-        "vhs_style", "polaroid_style", "nano_banana_pro"
+        "vhs_style", "polaroid_style", "nano_banana_pro", "text_to_image", "image_to_image"
     ]
 }
