@@ -298,7 +298,7 @@ AI_MODELS = {
     },
     "clothes_swap": {
         "model": "cuuupid/idm-vton",
-        "version": "0513734a452173b8173e907e3a59d19a36266e55b48528559432bd21c7d7e985",
+        "version": None,  # Use latest version
         "category": "magic_edit",
         "description": "Try on different outfits",
         "cost_per_run": 0.10,
@@ -443,6 +443,20 @@ AI_MODELS = {
         "prompt_upsampling": True,
     },
     "image_to_image": {
+        "model": "black-forest-labs/flux-dev",
+        "version": None,  # Use latest
+        "category": "magic_edit",
+        "description": "Transform images with AI using FLUX Dev",
+        "cost_per_run": 0.04,  # ~15 credits
+        "supports": ["image", "prompt"],
+        # FLUX Dev params
+        "guidance": 3.5,
+        "num_inference_steps": 28,
+        "prompt_strength": 0.8,
+        "output_format": "webp",
+    },
+    # img2img - alias for image_to_image (Flutter app uses this ID)
+    "img2img": {
         "model": "black-forest-labs/flux-dev",
         "version": None,  # Use latest
         "category": "magic_edit",

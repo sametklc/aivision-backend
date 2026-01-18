@@ -996,7 +996,7 @@ class ReplicateService:
                 inputs["safety_tolerance"] = config.get("safety_tolerance", 2)
                 inputs["prompt_upsampling"] = config.get("prompt_upsampling", True)
 
-            case "image_to_image":
+            case "image_to_image" | "img2img":
                 # black-forest-labs/flux-dev - Image to image transformation
                 if not image_url:
                     raise ValueError("Image to Image requires an input image")
@@ -1299,7 +1299,7 @@ class ReplicateService:
             "text_effects": 3, "tattoo_tryon": 3, "style_transfer": 4,
             "nano_banana_pro": 6,  # $0.15 per run
             # TEXT-TO-IMAGE / IMAGE-TO-IMAGE
-            "text_to_image": 15, "image_to_image": 15,
+            "text_to_image": 15, "image_to_image": 15, "img2img": 15,
         }
         return costs.get(tool_id, 2)
 
