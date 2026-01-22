@@ -7,13 +7,51 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from loguru import logger
 import firebase_admin
-from firebase_admin import auth, firestore
+from firebase_admin import auth, firestore, credentials
 from datetime import datetime
+import os
+import json
 
 router = APIRouter(prefix="/api/v1/credits", tags=["Credits"])
 
-# Firestore client
-db = firestore.client()
+
+def _ensure_firebase_initialized():
+    """Ensure Firebase Admin SDK is initialized."""
+    try:
+        firebase_admin.get_app()
+    except ValueError:
+        # Not initialized yet, initialize it
+        firebase_creds_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+
+        if firebase_creds_json:
+            try:
+                creds_dict = json.loads(firebase_creds_json)
+                cred = credentials.Certificate(creds_dict)
+                bucket_name = os.environ.get("FIREBASE_STORAGE_BUCKET", "aivision-47fb4.firebasestorage.app")
+                firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
+                logger.info("Firebase Admin SDK initialized for credit routes")
+            except Exception as e:
+                logger.error(f"Failed to initialize Firebase: {e}")
+                raise
+        else:
+            # Try file-based credentials
+            service_account_path = os.environ.get(
+                "FIREBASE_SERVICE_ACCOUNT_PATH",
+                "firebase-service-account.json"
+            )
+            if os.path.exists(service_account_path):
+                cred = credentials.Certificate(service_account_path)
+                bucket_name = os.environ.get("FIREBASE_STORAGE_BUCKET", "aivision-47fb4.firebasestorage.app")
+                firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
+                logger.info(f"Firebase Admin SDK initialized from file: {service_account_path}")
+            else:
+                raise ValueError("Firebase credentials not found")
+
+
+def get_firestore_client():
+    """Get Firestore client, initializing Firebase if needed."""
+    _ensure_firebase_initialized()
+    return firestore.client()
 
 
 # ==================== MODELS ====================
@@ -55,6 +93,8 @@ async def verify_firebase_token(authorization: str = Header(...)) -> str:
     Firebase ID Token'ı doğrula ve user_id döndür
     Header format: "Bearer <token>"
     """
+    _ensure_firebase_initialized()  # Firebase must be initialized before auth
+
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
 
@@ -78,6 +118,7 @@ async def get_balance(user_id: str = Depends(verify_firebase_token)):
     Kullanıcının kredi bakiyesini getir
     """
     try:
+        db = get_firestore_client()
         user_ref = db.collection('users').document(user_id)
         user_doc = user_ref.get()
 
@@ -110,6 +151,7 @@ async def deduct_credits(
     Kredi düş (generation başlamadan önce çağrılır)
     """
     try:
+        db = get_firestore_client()
         user_ref = db.collection('users').document(user_id)
         user_doc = user_ref.get()
 
@@ -165,6 +207,7 @@ async def add_credits(
     Kredi ekle (satın alma sonrası veya refund için)
     """
     try:
+        db = get_firestore_client()
         user_ref = db.collection('users').document(user_id)
         user_doc = user_ref.get()
 
