@@ -1,6 +1,6 @@
 """
 AIVision API - Credit Routes
-Secure credit management with Firebase Auth verification
+Secure credit management with Firebase Auth + RevenueCat validation
 """
 from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel, Field
@@ -11,8 +11,16 @@ from firebase_admin import auth, firestore, credentials
 from datetime import datetime
 import os
 import json
+import httpx
 
 router = APIRouter(prefix="/api/v1/credits", tags=["Credits"])
+
+# RevenueCat API configuration
+REVENUECAT_API_KEY = os.environ.get("REVENUECAT_API_KEY", "")
+REVENUECAT_BASE_URL = "https://api.revenuecat.com/v1"
+
+# Internal API key for backend-only endpoints
+INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
 
 def _ensure_firebase_initialized():
@@ -20,7 +28,6 @@ def _ensure_firebase_initialized():
     try:
         firebase_admin.get_app()
     except ValueError:
-        # Not initialized yet, initialize it
         firebase_creds_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
 
         if firebase_creds_json:
@@ -34,7 +41,6 @@ def _ensure_firebase_initialized():
                 logger.error(f"Failed to initialize Firebase: {e}")
                 raise
         else:
-            # Try file-based credentials
             service_account_path = os.environ.get(
                 "FIREBASE_SERVICE_ACCOUNT_PATH",
                 "firebase-service-account.json"
@@ -77,6 +83,8 @@ class DeductCreditsResponse(BaseModel):
 class AddCreditsRequest(BaseModel):
     amount: int = Field(..., gt=0, description="Amount to add")
     reason: str = Field(default="purchase", description="Reason for addition")
+    transaction_id: str = Field(..., description="RevenueCat transaction ID for validation")
+    product_id: str = Field(..., description="Product ID that was purchased")
 
 
 class AddCreditsResponse(BaseModel):
@@ -86,14 +94,21 @@ class AddCreditsResponse(BaseModel):
     amount_added: int
 
 
-# ==================== AUTH HELPER ====================
+class InternalRefundRequest(BaseModel):
+    user_id: str = Field(..., description="User ID to refund")
+    amount: int = Field(..., gt=0, description="Amount to refund")
+    reason: str = Field(..., description="Reason for refund")
+    job_id: Optional[str] = Field(None, description="Failed job ID")
+
+
+# ==================== AUTH HELPERS ====================
 
 async def verify_firebase_token(authorization: str = Header(...)) -> str:
     """
     Firebase ID Token'ı doğrula ve user_id döndür
     Header format: "Bearer <token>"
     """
-    _ensure_firebase_initialized()  # Firebase must be initialized before auth
+    _ensure_firebase_initialized()
 
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header")
@@ -108,6 +123,110 @@ async def verify_firebase_token(authorization: str = Header(...)) -> str:
     except Exception as e:
         logger.error(f"❌ Token verification failed: {e}")
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+async def verify_internal_api_key(x_internal_key: str = Header(..., alias="X-Internal-Key")) -> bool:
+    """
+    Verify internal API key for backend-only endpoints
+    """
+    if not INTERNAL_API_KEY:
+        logger.error("❌ INTERNAL_API_KEY not configured!")
+        raise HTTPException(status_code=500, detail="Internal API key not configured")
+
+    if x_internal_key != INTERNAL_API_KEY:
+        logger.warning("⚠️ Invalid internal API key attempt")
+        raise HTTPException(status_code=403, detail="Invalid internal API key")
+
+    return True
+
+
+# ==================== REVENUECAT VALIDATION ====================
+
+async def validate_revenuecat_purchase(user_id: str, transaction_id: str, product_id: str) -> bool:
+    """
+    Validate purchase with RevenueCat API
+    Returns True if purchase is valid and not already processed
+    """
+    if not REVENUECAT_API_KEY:
+        logger.error("❌ REVENUECAT_API_KEY not configured!")
+        raise HTTPException(status_code=500, detail="RevenueCat API key not configured")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Get subscriber info from RevenueCat
+            response = await client.get(
+                f"{REVENUECAT_BASE_URL}/subscribers/{user_id}",
+                headers={
+                    "Authorization": f"Bearer {REVENUECAT_API_KEY}",
+                    "Content-Type": "application/json",
+                }
+            )
+
+            if response.status_code == 404:
+                logger.warning(f"⚠️ RevenueCat subscriber not found: {user_id}")
+                raise HTTPException(status_code=400, detail="Subscriber not found in RevenueCat")
+
+            if response.status_code != 200:
+                logger.error(f"❌ RevenueCat API error: {response.status_code} - {response.text}")
+                raise HTTPException(status_code=500, detail="Failed to validate purchase with RevenueCat")
+
+            data = response.json()
+            subscriber = data.get("subscriber", {})
+
+            # Check non_subscriptions for consumables (credit packages)
+            non_subscriptions = subscriber.get("non_subscriptions", {})
+
+            # Look for the product and transaction
+            product_purchases = non_subscriptions.get(product_id, [])
+
+            for purchase in product_purchases:
+                if purchase.get("id") == transaction_id or purchase.get("store_transaction_id") == transaction_id:
+                    logger.info(f"✅ Valid purchase found: {transaction_id} for product {product_id}")
+                    return True
+
+            # Also check subscriptions
+            subscriptions = subscriber.get("subscriptions", {})
+            if product_id in subscriptions:
+                sub_info = subscriptions[product_id]
+                # Verify this is an active subscription
+                if sub_info.get("store_transaction_id") == transaction_id:
+                    logger.info(f"✅ Valid subscription found: {transaction_id} for product {product_id}")
+                    return True
+
+            logger.warning(f"⚠️ Purchase not found: {transaction_id} for product {product_id}")
+            raise HTTPException(status_code=400, detail="Purchase not found or already processed")
+
+    except httpx.RequestError as e:
+        logger.error(f"❌ RevenueCat request error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to connect to RevenueCat")
+
+
+async def check_transaction_already_processed(user_id: str, transaction_id: str) -> bool:
+    """
+    Check if this transaction was already processed (prevent double-crediting)
+    """
+    db = get_firestore_client()
+
+    # Check credit_history for this transaction
+    history_ref = db.collection('users').document(user_id).collection('credit_history')
+    query = history_ref.where('transaction_id', '==', transaction_id).limit(1)
+    docs = query.get()
+
+    return len(list(docs)) > 0
+
+
+# ==================== CREDIT AMOUNTS FOR PRODUCTS ====================
+
+PRODUCT_CREDITS = {
+    # Credit packages (consumables)
+    "com.aivision.credits.500": 500,
+    "com.aivision.credits.1000": 1000,
+    "com.aivision.credits.2000": 2000,
+    # Subscriptions
+    "com.aivision.weekly": 500,
+    "com.aivision.weekly.pro": 1000,
+    "com.aivision.yearly": 5000,
+}
 
 
 # ==================== ENDPOINTS ====================
@@ -179,6 +298,7 @@ async def deduct_credits(
             'amount': -request.amount,
             'reason': request.reason,
             'balance_after': new_credits,
+            'type': 'deduct',
             'created_at': firestore.SERVER_TIMESTAMP,
         })
 
@@ -204,17 +324,38 @@ async def add_credits(
     user_id: str = Depends(verify_firebase_token)
 ):
     """
-    Kredi ekle (satın alma sonrası veya refund için)
+    Kredi ekle - SADECE DOĞRULANMIŞ SATIN ALMALAR İÇİN
+    RevenueCat ile satın alma doğrulaması yapılır
     """
     try:
+        # 1. Check if transaction already processed (prevent double-crediting)
+        if await check_transaction_already_processed(user_id, request.transaction_id):
+            logger.warning(f"⚠️ Transaction already processed: {request.transaction_id}")
+            raise HTTPException(status_code=400, detail="Transaction already processed")
+
+        # 2. Validate with RevenueCat
+        await validate_revenuecat_purchase(user_id, request.transaction_id, request.product_id)
+
+        # 3. Get credit amount for this product
+        credit_amount = PRODUCT_CREDITS.get(request.product_id)
+        if credit_amount is None:
+            logger.error(f"❌ Unknown product ID: {request.product_id}")
+            raise HTTPException(status_code=400, detail="Unknown product ID")
+
+        # Override with request amount if it matches (for flexibility)
+        if request.amount != credit_amount:
+            logger.warning(f"⚠️ Request amount {request.amount} doesn't match product credits {credit_amount}")
+            # Use the predefined amount for security
+            credit_amount = PRODUCT_CREDITS[request.product_id]
+
+        # 4. Add credits to user
         db = get_firestore_client()
         user_ref = db.collection('users').document(user_id)
         user_doc = user_ref.get()
 
         if not user_doc.exists:
-            # Yeni kullanıcı oluştur
             current_credits = 0
-            new_credits = request.amount
+            new_credits = credit_amount
             user_ref.set({
                 'id': user_id,
                 'credits': new_credits,
@@ -223,27 +364,30 @@ async def add_credits(
             })
         else:
             current_credits = user_doc.to_dict().get('credits', 0)
-            new_credits = current_credits + request.amount
+            new_credits = current_credits + credit_amount
             user_ref.update({
                 'credits': new_credits,
                 'updated_at': firestore.SERVER_TIMESTAMP,
             })
 
-        # Log to credit_history
+        # 5. Log to credit_history with transaction_id (for duplicate check)
         user_ref.collection('credit_history').add({
-            'amount': request.amount,
+            'amount': credit_amount,
             'reason': request.reason,
+            'product_id': request.product_id,
+            'transaction_id': request.transaction_id,
             'balance_after': new_credits,
+            'type': 'purchase',
             'created_at': firestore.SERVER_TIMESTAMP,
         })
 
-        logger.info(f"💰 Added {request.amount} credits to {user_id}. {current_credits} -> {new_credits}")
+        logger.info(f"💰 Added {credit_amount} credits to {user_id} (product: {request.product_id}). {current_credits} -> {new_credits}")
 
         return AddCreditsResponse(
             success=True,
             credits_before=current_credits,
             credits_after=new_credits,
-            amount_added=request.amount
+            amount_added=credit_amount
         )
 
     except HTTPException:
@@ -253,13 +397,138 @@ async def add_credits(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/refund", response_model=AddCreditsResponse)
-async def refund_credits(
-    request: AddCreditsRequest,
-    user_id: str = Depends(verify_firebase_token)
+@router.post("/internal/refund")
+async def internal_refund_credits(
+    request: InternalRefundRequest,
+    _: bool = Depends(verify_internal_api_key)
 ):
     """
-    Kredi iade et (generation başarısız olduğunda)
+    KREDİ İADE - SADECE BACKEND İÇİN
+    Bu endpoint sadece internal API key ile çağrılabilir
+    Client bu endpoint'e ERİŞEMEZ
     """
-    request.reason = f"refund_{request.reason}"
-    return await add_credits(request, user_id)
+    try:
+        db = get_firestore_client()
+        user_ref = db.collection('users').document(request.user_id)
+        user_doc = user_ref.get()
+
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        current_credits = user_doc.to_dict().get('credits', 0)
+        new_credits = current_credits + request.amount
+
+        # Update credits
+        user_ref.update({
+            'credits': new_credits,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        })
+
+        # Log to credit_history
+        user_ref.collection('credit_history').add({
+            'amount': request.amount,
+            'reason': f"refund_{request.reason}",
+            'job_id': request.job_id,
+            'balance_after': new_credits,
+            'type': 'refund',
+            'created_at': firestore.SERVER_TIMESTAMP,
+        })
+
+        logger.info(f"💰 REFUND: Added {request.amount} credits to {request.user_id}. {current_credits} -> {new_credits}")
+
+        return {
+            "success": True,
+            "credits_before": current_credits,
+            "credits_after": new_credits,
+            "amount_refunded": request.amount
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error refunding credits: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== REVENUECAT WEBHOOK (Optional but recommended) ====================
+
+@router.post("/webhook/revenuecat")
+async def revenuecat_webhook(
+    event: dict,
+    authorization: str = Header(None)
+):
+    """
+    RevenueCat Webhook - Otomatik kredi ekleme
+    RevenueCat dashboard'da bu URL'yi webhook olarak ayarla
+    Bu en güvenli yöntem - client hiç karışmıyor
+    """
+    # Verify webhook authorization (optional but recommended)
+    webhook_auth = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
+    if webhook_auth and authorization != f"Bearer {webhook_auth}":
+        logger.warning("⚠️ Invalid webhook authorization")
+        raise HTTPException(status_code=401, detail="Invalid webhook authorization")
+
+    try:
+        event_type = event.get("event", {}).get("type")
+        app_user_id = event.get("event", {}).get("app_user_id")
+        product_id = event.get("event", {}).get("product_id")
+        transaction_id = event.get("event", {}).get("transaction_id") or event.get("event", {}).get("id")
+
+        logger.info(f"📥 RevenueCat webhook: {event_type} for user {app_user_id}")
+
+        # Handle purchase events
+        if event_type in ["INITIAL_PURCHASE", "NON_RENEWING_PURCHASE", "RENEWAL"]:
+            credit_amount = PRODUCT_CREDITS.get(product_id)
+
+            if credit_amount is None:
+                logger.warning(f"⚠️ Unknown product in webhook: {product_id}")
+                return {"success": True, "message": "Unknown product, skipped"}
+
+            # Check if already processed
+            if await check_transaction_already_processed(app_user_id, transaction_id):
+                logger.info(f"ℹ️ Transaction already processed: {transaction_id}")
+                return {"success": True, "message": "Already processed"}
+
+            # Add credits
+            db = get_firestore_client()
+            user_ref = db.collection('users').document(app_user_id)
+            user_doc = user_ref.get()
+
+            if user_doc.exists:
+                current_credits = user_doc.to_dict().get('credits', 0)
+                new_credits = current_credits + credit_amount
+                user_ref.update({
+                    'credits': new_credits,
+                    'updated_at': firestore.SERVER_TIMESTAMP,
+                })
+            else:
+                new_credits = credit_amount + 15  # Initial credits + purchase
+                user_ref.set({
+                    'id': app_user_id,
+                    'credits': new_credits,
+                    'created_at': firestore.SERVER_TIMESTAMP,
+                    'updated_at': firestore.SERVER_TIMESTAMP,
+                })
+                current_credits = 15
+
+            # Log transaction
+            user_ref.collection('credit_history').add({
+                'amount': credit_amount,
+                'reason': 'webhook_purchase',
+                'product_id': product_id,
+                'transaction_id': transaction_id,
+                'event_type': event_type,
+                'balance_after': new_credits,
+                'type': 'purchase',
+                'created_at': firestore.SERVER_TIMESTAMP,
+            })
+
+            logger.info(f"✅ Webhook: Added {credit_amount} credits to {app_user_id}")
+            return {"success": True, "credits_added": credit_amount}
+
+        return {"success": True, "message": f"Event {event_type} handled"}
+
+    except Exception as e:
+        logger.error(f"❌ Webhook error: {e}")
+        # Return 200 to prevent RevenueCat from retrying
+        return {"success": False, "error": str(e)}

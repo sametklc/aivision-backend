@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-change-in-production"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # RevenueCat API (for purchase validation)
+    REVENUECAT_API_KEY: str = ""  # Secret API key from RevenueCat dashboard
+    REVENUECAT_PROJECT_ID: str = ""  # Your RevenueCat project ID
+
+    # Internal API Key (for backend-only endpoints like refund)
+    INTERNAL_API_KEY: str = ""  # Generate a strong random key
+
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_PERIOD: int = 60  # seconds
