@@ -10,7 +10,7 @@ from loguru import logger
 import sys
 
 from .config import get_settings
-from .routes import ai_routes, tools_routes, upload_routes
+from .routes import ai_routes, tools_routes, upload_routes, credit_routes
 
 # Configure logging
 logger.remove()
@@ -93,6 +93,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(ai_routes.router)
 app.include_router(tools_routes.router)
 app.include_router(upload_routes.router)
+app.include_router(credit_routes.router)
 
 
 # Health check endpoint
