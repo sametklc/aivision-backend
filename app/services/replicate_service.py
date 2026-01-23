@@ -1308,24 +1308,32 @@ class ReplicateService:
         return time_estimates.get(tool_id, 15)
 
     def get_credit_cost(self, tool_id: str) -> int:
-        """Get credit cost for tools - MUST match Flutter tools_data.dart values."""
+        """Get credit cost for tools - MUST match Flutter credit_service.dart values."""
         costs = {
             # ═══════════════════════════════════════════════════════════════════
-            # VIDEO AI (matches Flutter tools_data.dart)
+            # VIDEO AI - Tools list (matches tools_data.dart)
             # ═══════════════════════════════════════════════════════════════════
-            "image_to_video": 15,
-            "text_to_video": 12,
+            "image_to_video": 15,      # Wan model
+            "text_to_video": 12,       # Seedance - base cost
             "talking_head": 105,
             "video_expand": 100,
             "video_bg_remove": 24,
             "face_swap_video": 45,
             "script_to_video": 150,
-            "style_transfer_video": 30,  # Not in Flutter, default
-            "ai_hug": 30,  # Showcase only, default
-            "kling_video": 30,  # Showcase only, default
+            "style_transfer_video": 30,
+            "super_slowmo": 30,
+            "video_upscale": 45,
 
             # ═══════════════════════════════════════════════════════════════════
-            # PHOTO ENHANCE (all 30 credits in Flutter)
+            # VIDEO AI - Showcase only (expensive models)
+            # ═══════════════════════════════════════════════════════════════════
+            "ai_hug": 15,              # Wan model
+            "kling_video": 100,        # Kling Pro - expensive!
+            "kling_v26": 100,          # Kling v2.6 - expensive!
+            "veo_3_fast": 100,         # Veo 3 - expensive!
+
+            # ═══════════════════════════════════════════════════════════════════
+            # PHOTO ENHANCE (all 30 credits)
             # ═══════════════════════════════════════════════════════════════════
             "face_clarify": 30,
             "old_photo_restore": 30,
@@ -1337,15 +1345,15 @@ class ReplicateService:
             "denoise": 30,
             "anime_yourself": 30,
             "color_correct": 30,
-            "portrait_mode": 30,  # Not in Flutter list, default
+            "portrait_mode": 30,
 
             # ═══════════════════════════════════════════════════════════════════
-            # MAGIC EDIT (matches Flutter tools_data.dart)
+            # MAGIC EDIT
             # ═══════════════════════════════════════════════════════════════════
             "text_to_image": 30,
             "img2img": 30,
-            "image_to_image": 30,  # Alias for img2img
-            "flux_pro": 50,
+            "image_to_image": 30,
+            "flux_pro": 50,            # Flux Pro - premium
             "style_transfer": 30,
             "magic_eraser": 30,
             "ai_headshot": 30,
@@ -1360,9 +1368,9 @@ class ReplicateService:
             "tattoo_tryon": 30,
 
             # ═══════════════════════════════════════════════════════════════════
-            # SHOWCASE TEMPLATES (nano_banana_pro, etc.)
+            # SHOWCASE TEMPLATES
             # ═══════════════════════════════════════════════════════════════════
-            "nano_banana_pro": 30,  # Showcase template
+            "nano_banana_pro": 45,     # Nano Banana Pro
         }
         return costs.get(tool_id, 30)  # Default 30 for unknown tools
 
