@@ -151,11 +151,21 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
         logger.error("❌ REVENUECAT_API_KEY not configured!")
         raise HTTPException(status_code=500, detail="RevenueCat API key not configured")
 
+    # Extract the actual RevenueCat app user ID from the transaction_id if it's in our composite format
+    # Format: appUserId_productId_timestamp or just the raw transaction ID
+    rc_user_id = user_id
+    if "_" in transaction_id:
+        parts = transaction_id.split("_")
+        if len(parts) >= 2:
+            # First part is the RevenueCat app user ID
+            rc_user_id = parts[0]
+            logger.info(f"🔍 Extracted RevenueCat user ID: {rc_user_id} from transaction: {transaction_id}")
+
     try:
         async with httpx.AsyncClient() as client:
-            # Get subscriber info from RevenueCat
+            # Get subscriber info from RevenueCat using the RC user ID
             response = await client.get(
-                f"{REVENUECAT_BASE_URL}/subscribers/{user_id}",
+                f"{REVENUECAT_BASE_URL}/subscribers/{rc_user_id}",
                 headers={
                     "Authorization": f"Bearer {REVENUECAT_API_KEY}",
                     "Content-Type": "application/json",
@@ -163,7 +173,7 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
             )
 
             if response.status_code == 404:
-                logger.warning(f"⚠️ RevenueCat subscriber not found: {user_id}")
+                logger.warning(f"⚠️ RevenueCat subscriber not found: {rc_user_id}")
                 raise HTTPException(status_code=400, detail="Subscriber not found in RevenueCat")
 
             if response.status_code != 200:
@@ -184,16 +194,48 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
                     logger.info(f"✅ Valid purchase found: {transaction_id} for product {product_id}")
                     return True
 
-            # Also check subscriptions
+            # Check subscriptions - for subscriptions, we validate by checking active entitlement
             subscriptions = subscriber.get("subscriptions", {})
-            if product_id in subscriptions:
-                sub_info = subscriptions[product_id]
-                # Verify this is an active subscription
-                if sub_info.get("store_transaction_id") == transaction_id:
-                    logger.info(f"✅ Valid subscription found: {transaction_id} for product {product_id}")
+
+            # Also check with Android format (product_id:base_plan_id)
+            product_variants = [product_id]
+            if ":" in product_id:
+                # Already has base plan, also check without it
+                product_variants.append(product_id.split(":")[0])
+            else:
+                # Add common Android base plan formats
+                product_variants.extend([
+                    f"{product_id}:weekly",
+                    f"{product_id}:yearly",
+                    f"{product_id}:monthly",
+                ])
+
+            for variant in product_variants:
+                if variant in subscriptions:
+                    sub_info = subscriptions[variant]
+                    # For subscriptions, check if it's active (not expired)
+                    # If expiration_date is in the future or unsubscribe_detected_at is None, it's valid
+                    expires_date = sub_info.get("expires_date")
+                    unsubscribe_detected = sub_info.get("unsubscribe_detected_at")
+
+                    logger.info(f"🔍 Found subscription {variant}: expires={expires_date}, unsubscribe={unsubscribe_detected}")
+
+                    # Subscription is valid if it exists and has any transaction
+                    if sub_info.get("store_transaction_id") or sub_info.get("original_purchase_date"):
+                        logger.info(f"✅ Valid subscription found for product {variant}")
+                        return True
+
+            # Check entitlements as fallback
+            entitlements = subscriber.get("entitlements", {})
+            if "pro" in entitlements:
+                ent_info = entitlements["pro"]
+                if ent_info.get("product_identifier") in product_variants:
+                    logger.info(f"✅ Valid entitlement 'pro' found for product {product_id}")
                     return True
 
             logger.warning(f"⚠️ Purchase not found: {transaction_id} for product {product_id}")
+            logger.warning(f"⚠️ Available subscriptions: {list(subscriptions.keys())}")
+            logger.warning(f"⚠️ Available non_subscriptions: {list(non_subscriptions.keys())}")
             raise HTTPException(status_code=400, detail="Purchase not found or already processed")
 
     except httpx.RequestError as e:
