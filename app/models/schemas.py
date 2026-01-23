@@ -292,7 +292,10 @@ class ToolInfo(BaseModel):
     description: str
     category: ToolCategory
     credit_cost: int
-    input_type: Literal["text_only", "image_text", "image_only", "dual_image"]
+    input_type: Literal[
+        "text_only", "image_text", "image_only", "dual_image",
+        "image_audio", "video_only", "image_video", "image_mask"
+    ]
     supports_styles: bool = False
     supports_aspect_ratio: bool = False
     max_duration: Optional[int] = None
