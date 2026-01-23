@@ -1,12 +1,17 @@
 """
 AIVision API - AI Routes
 Endpoints for all AI tools
+SECURED with Firebase Auth + Credit Validation
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Header
 from typing import Dict, Any
 from loguru import logger
 import uuid
 from datetime import datetime
+import firebase_admin
+from firebase_admin import auth, firestore, credentials
+import os
+import json
 
 from ..models.schemas import (
     GenericAIRequest,
@@ -38,6 +43,111 @@ from ..config import AI_MODELS
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI Tools"])
 
+
+# ==================== FIREBASE AUTH ====================
+
+def _ensure_firebase_initialized():
+    """Ensure Firebase Admin SDK is initialized."""
+    try:
+        firebase_admin.get_app()
+    except ValueError:
+        firebase_creds_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+
+        if firebase_creds_json:
+            try:
+                creds_dict = json.loads(firebase_creds_json)
+                cred = credentials.Certificate(creds_dict)
+                bucket_name = os.environ.get("FIREBASE_STORAGE_BUCKET", "aivision-47fb4.firebasestorage.app")
+                firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
+                logger.info("Firebase Admin SDK initialized for AI routes")
+            except Exception as e:
+                logger.error(f"Failed to initialize Firebase: {e}")
+                raise
+        else:
+            service_account_path = os.environ.get(
+                "FIREBASE_SERVICE_ACCOUNT_PATH",
+                "firebase-service-account.json"
+            )
+            if os.path.exists(service_account_path):
+                cred = credentials.Certificate(service_account_path)
+                bucket_name = os.environ.get("FIREBASE_STORAGE_BUCKET", "aivision-47fb4.firebasestorage.app")
+                firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
+                logger.info(f"Firebase Admin SDK initialized from file: {service_account_path}")
+            else:
+                raise ValueError("Firebase credentials not found")
+
+
+def get_firestore_client():
+    """Get Firestore client, initializing Firebase if needed."""
+    _ensure_firebase_initialized()
+    return firestore.client()
+
+
+async def verify_firebase_token(authorization: str = Header(...)) -> str:
+    """
+    Verify Firebase ID Token and return user_id
+    Header format: "Bearer <token>"
+    """
+    _ensure_firebase_initialized()
+
+    if not authorization.startswith("Bearer "):
+        logger.warning("🚫 Invalid authorization header format")
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+    token = authorization.replace("Bearer ", "")
+
+    try:
+        decoded_token = auth.verify_id_token(token)
+        user_id = decoded_token['uid']
+        logger.info(f"🔐 AI Routes - Token verified for user: {user_id}")
+        return user_id
+    except Exception as e:
+        logger.error(f"❌ AI Routes - Token verification failed: {e}")
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+async def check_and_deduct_credits(user_id: str, tool_id: str, credit_cost: int) -> bool:
+    """
+    Check if user has enough credits and deduct them
+    Returns True if successful, raises HTTPException if not enough credits
+    """
+    db = get_firestore_client()
+    user_ref = db.collection('users').document(user_id)
+    user_doc = user_ref.get()
+
+    if not user_doc.exists:
+        logger.warning(f"🚫 User not found: {user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+
+    current_credits = user_doc.to_dict().get('credits', 0)
+
+    if current_credits < credit_cost:
+        logger.warning(f"🚫 Insufficient credits for {user_id}: has {current_credits}, needs {credit_cost}")
+        raise HTTPException(
+            status_code=402,  # Payment Required
+            detail=f"Insufficient credits. Have: {current_credits}, Need: {credit_cost}"
+        )
+
+    # Deduct credits BEFORE processing
+    new_credits = current_credits - credit_cost
+
+    user_ref.update({
+        'credits': new_credits,
+        'updated_at': firestore.SERVER_TIMESTAMP,
+    })
+
+    # Log to credit_history
+    user_ref.collection('credit_history').add({
+        'amount': -credit_cost,
+        'reason': f'generation_{tool_id}',
+        'balance_after': new_credits,
+        'type': 'deduct',
+        'created_at': firestore.SERVER_TIMESTAMP,
+    })
+
+    logger.info(f"💰 Deducted {credit_cost} credits from {user_id} for {tool_id}. {current_credits} -> {new_credits}")
+    return True
+
 # In-memory job storage (use Redis/DB in production)
 jobs_store: Dict[str, Dict[str, Any]] = {}
 
@@ -47,11 +157,13 @@ jobs_store: Dict[str, Dict[str, Any]] = {}
 @router.post("/generate", response_model=JobResponse)
 async def generate(
     request: GenericAIRequest,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
 ):
     """
     Universal generation endpoint for any AI tool.
-    Accepts tool_id and routes to appropriate handler.
+    SECURED: Requires Firebase Auth token + sufficient credits.
+    Credits are deducted BEFORE processing starts.
     """
     tool_id = request.tool_id
 
@@ -62,16 +174,27 @@ async def generate(
             detail=f"Unknown tool: {tool_id}. Check /api/v1/tools for available tools."
         )
 
+    # Get credit cost for this tool
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+
+    # CHECK AND DEDUCT CREDITS BEFORE PROCESSING
+    # This prevents unauthorized generation
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
+    logger.info(f"🎨 Starting job for user {user_id}, tool {tool_id}, cost {credit_cost} credits")
+
     # Create job
     job_id = str(uuid.uuid4())
     job = {
         "job_id": job_id,
         "tool_id": tool_id,
+        "user_id": user_id,  # Track which user created this job
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "input": request.model_dump(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
     jobs_store[job_id] = job
 
@@ -103,7 +226,7 @@ async def generate(
         tool_id=tool_id,
         status=JobStatus.PENDING,
         estimated_time=replicate_service.get_estimated_time(tool_id),
-        credits_used=replicate_service.get_credit_cost(tool_id),
+        credits_used=credit_cost,
     )
 
 
@@ -198,18 +321,29 @@ async def get_job_status(job_id: str):
 
 
 # ==================== VIDEO AI ENDPOINTS ====================
+# All endpoints below require Firebase Auth + Credit check
 
 @router.post("/video/text-to-video", response_model=JobResponse)
-async def text_to_video(request: TextToVideoRequest, background_tasks: BackgroundTasks):
-    """Generate video from text prompt."""
+async def text_to_video(
+    request: TextToVideoRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Generate video from text prompt. SECURED."""
+    tool_id = "text_to_video"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "text_to_video",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -221,30 +355,40 @@ async def text_to_video(request: TextToVideoRequest, background_tasks: Backgroun
         "seed": request.seed,
     }
 
-    background_tasks.add_task(process_job, job_id, "text_to_video", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Text-to-video generation started",
         job_id=job_id,
-        tool_id="text_to_video",
+        tool_id=tool_id,
         status=JobStatus.PENDING,
         estimated_time=120,
-        credits_used=15,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/video/image-to-video", response_model=JobResponse)
-async def image_to_video(request: ImageToVideoRequest, background_tasks: BackgroundTasks):
-    """Animate an image into video."""
+async def image_to_video(
+    request: ImageToVideoRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Animate an image into video. SECURED."""
+    tool_id = "image_to_video"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "image_to_video",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -254,32 +398,41 @@ async def image_to_video(request: ImageToVideoRequest, background_tasks: Backgro
         "motion_strength": request.motion_strength,
     }
 
-    background_tasks.add_task(process_job, job_id, "image_to_video", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Image-to-video animation started",
         job_id=job_id,
-        tool_id="image_to_video",
+        tool_id=tool_id,
         estimated_time=90,
-        credits_used=10,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/video/ai-hug", response_model=JobResponse)
-async def ai_hug(request: AIHugRequest, background_tasks: BackgroundTasks):
-    """Create hugging animation from two photos."""
+async def ai_hug(
+    request: AIHugRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Create hugging animation from two photos. SECURED."""
+    tool_id = "ai_hug"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "ai_hug",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
-    # AI Hug requires preprocessing to combine two faces
     input_params = {
         "person1_url": str(request.person1_image_url),
         "person2_url": str(request.person2_image_url),
@@ -287,29 +440,39 @@ async def ai_hug(request: AIHugRequest, background_tasks: BackgroundTasks):
         "duration": request.duration,
     }
 
-    background_tasks.add_task(process_job, job_id, "ai_hug", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="AI Hug generation started",
         job_id=job_id,
-        tool_id="ai_hug",
+        tool_id=tool_id,
         estimated_time=120,
-        credits_used=12,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/video/face-swap", response_model=JobResponse)
-async def face_swap_video(request: FaceSwapVideoRequest, background_tasks: BackgroundTasks):
-    """Swap face in a video."""
+async def face_swap_video(
+    request: FaceSwapVideoRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Swap face in a video. SECURED."""
+    tool_id = "face_swap_video"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "face_swap_video",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -317,29 +480,39 @@ async def face_swap_video(request: FaceSwapVideoRequest, background_tasks: Backg
         "target_video_url": str(request.target_video_url),
     }
 
-    background_tasks.add_task(process_job, job_id, "face_swap_video", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Face swap video started",
         job_id=job_id,
-        tool_id="face_swap_video",
+        tool_id=tool_id,
         estimated_time=90,
-        credits_used=10,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/video/talking-avatar", response_model=JobResponse)
-async def talking_avatar(request: TalkingAvatarRequest, background_tasks: BackgroundTasks):
-    """Create talking avatar from photo."""
+async def talking_avatar(
+    request: TalkingAvatarRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Create talking avatar from photo. SECURED."""
+    tool_id = "talking_avatar"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "talking_avatar",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -349,31 +522,42 @@ async def talking_avatar(request: TalkingAvatarRequest, background_tasks: Backgr
         "expression": request.expression,
     }
 
-    background_tasks.add_task(process_job, job_id, "talking_avatar", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Talking avatar generation started",
         job_id=job_id,
-        tool_id="talking_avatar",
+        tool_id=tool_id,
         estimated_time=60,
-        credits_used=8,
+        credits_used=credit_cost,
     )
 
 
 # ==================== PHOTO ENHANCE ENDPOINTS ====================
+# All endpoints below require Firebase Auth + Credit check
 
 @router.post("/enhance/upscale", response_model=JobResponse)
-async def upscale_image(request: UpscaleRequest, background_tasks: BackgroundTasks):
-    """Upscale image to 4K quality."""
+async def upscale_image(
+    request: UpscaleRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Upscale image to 4K quality. SECURED."""
+    tool_id = "4k_upscale"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "4k_upscale",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -382,29 +566,39 @@ async def upscale_image(request: UpscaleRequest, background_tasks: BackgroundTas
         "face_enhance": request.face_enhance,
     }
 
-    background_tasks.add_task(process_job, job_id, "4k_upscale", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="4K upscale started",
         job_id=job_id,
-        tool_id="4k_upscale",
+        tool_id=tool_id,
         estimated_time=30,
-        credits_used=3,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/enhance/face-clarify", response_model=JobResponse)
-async def face_clarify(request: FaceClarifyRequest, background_tasks: BackgroundTasks):
-    """Enhance and clarify faces in image."""
+async def face_clarify(
+    request: FaceClarifyRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Enhance and clarify faces in image. SECURED."""
+    tool_id = "face_clarify"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "face_clarify",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -412,29 +606,39 @@ async def face_clarify(request: FaceClarifyRequest, background_tasks: Background
         "version": request.version,
     }
 
-    background_tasks.add_task(process_job, job_id, "face_clarify", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Face clarify started",
         job_id=job_id,
-        tool_id="face_clarify",
+        tool_id=tool_id,
         estimated_time=15,
-        credits_used=2,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/enhance/denoise", response_model=JobResponse)
-async def denoise_image(request: DenoiseRequest, background_tasks: BackgroundTasks):
-    """Remove noise from image."""
+async def denoise_image(
+    request: DenoiseRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Remove noise from image. SECURED."""
+    tool_id = "denoise"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "denoise",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -442,29 +646,39 @@ async def denoise_image(request: DenoiseRequest, background_tasks: BackgroundTas
         "noise_level": request.noise_level,
     }
 
-    background_tasks.add_task(process_job, job_id, "denoise", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Denoise started",
         job_id=job_id,
-        tool_id="denoise",
+        tool_id=tool_id,
         estimated_time=20,
-        credits_used=2,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/enhance/colorize", response_model=JobResponse)
-async def colorize_image(request: ColorizeRequest, background_tasks: BackgroundTasks):
-    """Colorize black & white photo."""
+async def colorize_image(
+    request: ColorizeRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Colorize black & white photo. SECURED."""
+    tool_id = "colorize"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "colorize",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -472,29 +686,39 @@ async def colorize_image(request: ColorizeRequest, background_tasks: BackgroundT
         "render_factor": request.render_factor,
     }
 
-    background_tasks.add_task(process_job, job_id, "colorize", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Colorization started",
         job_id=job_id,
-        tool_id="colorize",
+        tool_id=tool_id,
         estimated_time=30,
-        credits_used=3,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/enhance/restore", response_model=JobResponse)
-async def restore_old_photo(request: OldPhotoRestoreRequest, background_tasks: BackgroundTasks):
-    """Restore old damaged photo."""
+async def restore_old_photo(
+    request: OldPhotoRestoreRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Restore old damaged photo. SECURED."""
+    tool_id = "old_photo_restore"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "old_photo_restore",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -503,60 +727,81 @@ async def restore_old_photo(request: OldPhotoRestoreRequest, background_tasks: B
         "face_enhance": request.face_enhance,
     }
 
-    background_tasks.add_task(process_job, job_id, "old_photo_restore", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Photo restoration started",
         job_id=job_id,
-        tool_id="old_photo_restore",
+        tool_id=tool_id,
         estimated_time=45,
-        credits_used=4,
+        credits_used=credit_cost,
     )
 
 
 # ==================== MAGIC EDIT ENDPOINTS ====================
+# All endpoints below require Firebase Auth + Credit check
 
 @router.post("/edit/remove-background", response_model=JobResponse)
-async def remove_background(request: BackgroundRemoveRequest, background_tasks: BackgroundTasks):
-    """Remove background from image."""
+async def remove_background(
+    request: BackgroundRemoveRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Remove background from image. SECURED."""
+    tool_id = "background_remove"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "background_remove",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
         "image_url": str(request.image_url),
     }
 
-    background_tasks.add_task(process_job, job_id, "background_remove", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Background removal started",
         job_id=job_id,
-        tool_id="background_remove",
+        tool_id=tool_id,
         estimated_time=10,
-        credits_used=2,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/edit/change-background", response_model=JobResponse)
-async def change_background(request: BackgroundChangeRequest, background_tasks: BackgroundTasks):
-    """Change background of image."""
+async def change_background(
+    request: BackgroundChangeRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Change background of image. SECURED."""
+    tool_id = "background_change"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "background_change",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -565,29 +810,39 @@ async def change_background(request: BackgroundChangeRequest, background_tasks: 
         "mask_url": str(request.mask_url) if request.mask_url else None,
     }
 
-    background_tasks.add_task(process_job, job_id, "background_change", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Background change started",
         job_id=job_id,
-        tool_id="background_change",
+        tool_id=tool_id,
         estimated_time=30,
-        credits_used=4,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/edit/remove-object", response_model=JobResponse)
-async def remove_object(request: ObjectRemoveRequest, background_tasks: BackgroundTasks):
-    """Remove object from image."""
+async def remove_object(
+    request: ObjectRemoveRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Remove object from image. SECURED."""
+    tool_id = "object_remove"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "object_remove",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -595,29 +850,39 @@ async def remove_object(request: ObjectRemoveRequest, background_tasks: Backgrou
         "mask_url": str(request.mask_url),
     }
 
-    background_tasks.add_task(process_job, job_id, "object_remove", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Object removal started",
         job_id=job_id,
-        tool_id="object_remove",
+        tool_id=tool_id,
         estimated_time=20,
-        credits_used=3,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/edit/face-swap", response_model=JobResponse)
-async def face_swap(request: FaceSwapRequest, background_tasks: BackgroundTasks):
-    """Swap faces in photo."""
+async def face_swap(
+    request: FaceSwapRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Swap faces in photo. SECURED."""
+    tool_id = "face_swap"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "face_swap",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -625,29 +890,39 @@ async def face_swap(request: FaceSwapRequest, background_tasks: BackgroundTasks)
         "target_image_url": str(request.target_image_url),
     }
 
-    background_tasks.add_task(process_job, job_id, "face_swap", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Face swap started",
         job_id=job_id,
-        tool_id="face_swap",
+        tool_id=tool_id,
         estimated_time=20,
-        credits_used=3,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/edit/sketch-to-image", response_model=JobResponse)
-async def sketch_to_image(request: SketchToImageRequest, background_tasks: BackgroundTasks):
-    """Convert sketch to realistic image."""
+async def sketch_to_image(
+    request: SketchToImageRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Convert sketch to realistic image. SECURED."""
+    tool_id = "sketch_to_image"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "sketch_to_image",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -656,29 +931,39 @@ async def sketch_to_image(request: SketchToImageRequest, background_tasks: Backg
         "style": request.style.value,
     }
 
-    background_tasks.add_task(process_job, job_id, "sketch_to_image", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Sketch to image started",
         job_id=job_id,
-        tool_id="sketch_to_image",
+        tool_id=tool_id,
         estimated_time=30,
-        credits_used=4,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/edit/style-transfer", response_model=JobResponse)
-async def style_transfer(request: StyleTransferRequest, background_tasks: BackgroundTasks):
-    """Apply artistic style to image."""
+async def style_transfer(
+    request: StyleTransferRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Apply artistic style to image. SECURED."""
+    tool_id = "style_transfer"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "style_transfer",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -686,29 +971,39 @@ async def style_transfer(request: StyleTransferRequest, background_tasks: Backgr
         "style": request.style,
     }
 
-    background_tasks.add_task(process_job, job_id, "style_transfer", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Style transfer started",
         job_id=job_id,
-        tool_id="style_transfer",
+        tool_id=tool_id,
         estimated_time=25,
-        credits_used=3,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/edit/age-transform", response_model=JobResponse)
-async def age_transform(request: AgeTransformRequest, background_tasks: BackgroundTasks):
-    """Transform age in photo."""
+async def age_transform(
+    request: AgeTransformRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Transform age in photo. SECURED."""
+    tool_id = "age_transform"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "age_transform",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -716,29 +1011,39 @@ async def age_transform(request: AgeTransformRequest, background_tasks: Backgrou
         "target_age": request.target_age,
     }
 
-    background_tasks.add_task(process_job, job_id, "age_transform", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Age transform started",
         job_id=job_id,
-        tool_id="age_transform",
+        tool_id=tool_id,
         estimated_time=25,
-        credits_used=3,
+        credits_used=credit_cost,
     )
 
 
 @router.post("/edit/expression", response_model=JobResponse)
-async def edit_expression(request: ExpressionEditRequest, background_tasks: BackgroundTasks):
-    """Edit facial expression."""
+async def edit_expression(
+    request: ExpressionEditRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """Edit facial expression. SECURED."""
+    tool_id = "expression_edit"
+    credit_cost = replicate_service.get_credit_cost(tool_id)
+    await check_and_deduct_credits(user_id, tool_id, credit_cost)
+
     job_id = str(uuid.uuid4())
     jobs_store[job_id] = {
         "job_id": job_id,
-        "tool_id": "expression_edit",
+        "tool_id": tool_id,
+        "user_id": user_id,
         "status": JobStatus.PENDING,
         "created_at": datetime.utcnow(),
         "result": None,
         "error": None,
+        "credits_charged": credit_cost,
     }
 
     input_params = {
@@ -747,13 +1052,13 @@ async def edit_expression(request: ExpressionEditRequest, background_tasks: Back
         "intensity": request.intensity,
     }
 
-    background_tasks.add_task(process_job, job_id, "expression_edit", input_params)
+    background_tasks.add_task(process_job, job_id, tool_id, input_params)
 
     return JobResponse(
         success=True,
         message="Expression edit started",
         job_id=job_id,
-        tool_id="expression_edit",
+        tool_id=tool_id,
         estimated_time=20,
-        credits_used=3,
+        credits_used=credit_cost,
     )
