@@ -345,11 +345,33 @@ PRODUCT_CREDITS = {
     "com.aivision.credits.500": 500,
     "com.aivision.credits.1000": 1000,
     "com.aivision.credits.2000": 2000,
-    # Subscriptions
+    # Subscriptions (iOS format)
     "com.aivision.weekly": 500,        # 1 week premium + 500 credits
     "com.aivision.weekly.pro": 1000,   # 1 week pro + 1000 credits
     "com.aivision.yearly": 4000,       # 1 year subscription + 4000 credits
+    # Subscriptions (Android format - product_id:base_plan_id)
+    "com.aivision.weekly:weekly": 500,
+    "com.aivision.weekly.pro:weekly-pro": 1000,
+    "com.aivision.yearly:yearly": 4000,
 }
+
+
+def get_credit_amount_for_product(product_id: str) -> int | None:
+    """
+    Get credit amount for a product ID, handling both iOS and Android formats.
+    Android subscriptions use format: product_id:base_plan_id
+    """
+    # Direct match first
+    if product_id in PRODUCT_CREDITS:
+        return PRODUCT_CREDITS[product_id]
+
+    # Try without base plan ID (Android subscriptions)
+    if ":" in product_id:
+        base_product_id = product_id.split(":")[0]
+        if base_product_id in PRODUCT_CREDITS:
+            return PRODUCT_CREDITS[base_product_id]
+
+    return None
 
 
 # ==================== DEVICE TRACKING ====================
@@ -526,8 +548,8 @@ async def add_credits(
         # 1. Validate with RevenueCat FIRST (before any DB operations)
         await validate_revenuecat_purchase(user_id, request.transaction_id, request.product_id)
 
-        # 2. Get credit amount for this product
-        credit_amount = PRODUCT_CREDITS.get(request.product_id)
+        # 2. Get credit amount for this product (handles iOS and Android formats)
+        credit_amount = get_credit_amount_for_product(request.product_id)
         if credit_amount is None:
             logger.error(f"❌ Unknown product ID: {request.product_id}")
             raise HTTPException(status_code=400, detail="Unknown product ID")
@@ -695,7 +717,8 @@ async def revenuecat_webhook(
 
         # Handle purchase events
         if event_type in ["INITIAL_PURCHASE", "NON_RENEWING_PURCHASE", "RENEWAL"]:
-            credit_amount = PRODUCT_CREDITS.get(product_id)
+            # Use helper function that handles both iOS and Android formats
+            credit_amount = get_credit_amount_for_product(product_id)
 
             if credit_amount is None:
                 logger.warning(f"⚠️ Unknown product in webhook: {product_id}")
