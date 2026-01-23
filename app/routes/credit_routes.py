@@ -310,12 +310,52 @@ PRODUCT_CREDITS = {
 }
 
 
+# ==================== DEVICE TRACKING ====================
+
+async def check_device_abuse(db, device_id: str, user_id: str) -> bool:
+    """
+    Check if device has already received free credits with a different account.
+    Returns True if abuse detected (device already used free credits).
+    """
+    if not device_id or device_id == "unknown":
+        return False  # Can't check without device ID
+
+    # Check device_registry collection
+    device_ref = db.collection('device_registry').document(device_id)
+    device_doc = device_ref.get()
+
+    if device_doc.exists:
+        registered_user = device_doc.to_dict().get('user_id')
+        if registered_user and registered_user != user_id:
+            logger.warning(f"🚫 DEVICE ABUSE DETECTED! Device {device_id} already registered to {registered_user}, new user {user_id} trying to get free credits")
+            return True
+
+    return False
+
+
+async def register_device(db, device_id: str, user_id: str):
+    """Register device ID with user to prevent abuse."""
+    if not device_id or device_id == "unknown":
+        return
+
+    device_ref = db.collection('device_registry').document(device_id)
+    device_ref.set({
+        'user_id': user_id,
+        'registered_at': firestore.SERVER_TIMESTAMP,
+    }, merge=True)
+    logger.info(f"📱 Registered device {device_id} to user {user_id}")
+
+
 # ==================== ENDPOINTS ====================
 
 @router.get("/balance", response_model=CreditBalanceResponse)
-async def get_balance(user_id: str = Depends(verify_firebase_token)):
+async def get_balance(
+    user_id: str = Depends(verify_firebase_token),
+    device_id: str = Header(None, alias="X-Device-ID")
+):
     """
-    Kullanıcının kredi bakiyesini getir
+    Kullanıcının kredi bakiyesini getir.
+    Device ID ile anonim hesap abuse kontrolü yapılır.
     """
     try:
         db = get_firestore_client()
@@ -323,15 +363,37 @@ async def get_balance(user_id: str = Depends(verify_firebase_token)):
         user_doc = user_ref.get()
 
         if not user_doc.exists:
-            # Yeni kullanıcı - 15 kredi ile oluştur
+            # Check for device abuse BEFORE creating new user
+            if device_id:
+                is_abuse = await check_device_abuse(db, device_id, user_id)
+                if is_abuse:
+                    # Device already used free credits - create user with 0 credits
+                    logger.warning(f"🚫 Blocking free credits for abusive device: {device_id}")
+                    user_ref.set({
+                        'id': user_id,
+                        'credits': 0,  # NO FREE CREDITS FOR ABUSERS
+                        'device_id': device_id,
+                        'abuse_detected': True,
+                        'created_at': firestore.SERVER_TIMESTAMP,
+                        'updated_at': firestore.SERVER_TIMESTAMP,
+                    })
+                    return CreditBalanceResponse(success=True, credits=0, user_id=user_id)
+
+            # New legitimate user - 15 credits
             initial_credits = 15
             user_ref.set({
                 'id': user_id,
                 'credits': initial_credits,
+                'device_id': device_id,
                 'created_at': firestore.SERVER_TIMESTAMP,
                 'updated_at': firestore.SERVER_TIMESTAMP,
             })
-            logger.info(f"✅ Created new user {user_id} with {initial_credits} credits")
+
+            # Register device to prevent abuse
+            if device_id:
+                await register_device(db, device_id, user_id)
+
+            logger.info(f"✅ Created new user {user_id} with {initial_credits} credits (device: {device_id})")
             return CreditBalanceResponse(success=True, credits=initial_credits, user_id=user_id)
 
         credits = user_doc.to_dict().get('credits', 0)

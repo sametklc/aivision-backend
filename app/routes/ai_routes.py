@@ -108,45 +108,75 @@ async def verify_firebase_token(authorization: str = Header(...)) -> str:
 
 async def check_and_deduct_credits(user_id: str, tool_id: str, credit_cost: int) -> bool:
     """
-    Check if user has enough credits and deduct them
-    Returns True if successful, raises HTTPException if not enough credits
+    Check if user has enough credits and deduct them ATOMICALLY using Firestore transaction.
+    This prevents race conditions where multiple requests could bypass credit check.
+    Returns True if successful, raises HTTPException if not enough credits.
     """
     db = get_firestore_client()
     user_ref = db.collection('users').document(user_id)
-    user_doc = user_ref.get()
 
-    if not user_doc.exists:
-        logger.warning(f"🚫 User not found: {user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
+    # Use Firestore transaction for ATOMIC read-check-write
+    # This prevents race conditions where parallel requests see same credit balance
+    @firestore.transactional
+    def deduct_in_transaction(transaction, user_ref, credit_cost, tool_id):
+        # Read current credits within transaction
+        user_doc = user_ref.get(transaction=transaction)
 
-    current_credits = user_doc.to_dict().get('credits', 0)
+        if not user_doc.exists:
+            raise ValueError("USER_NOT_FOUND")
 
-    if current_credits < credit_cost:
-        logger.warning(f"🚫 Insufficient credits for {user_id}: has {current_credits}, needs {credit_cost}")
-        raise HTTPException(
-            status_code=402,  # Payment Required
-            detail=f"Insufficient credits. Have: {current_credits}, Need: {credit_cost}"
-        )
+        current_credits = user_doc.to_dict().get('credits', 0)
 
-    # Deduct credits BEFORE processing
-    new_credits = current_credits - credit_cost
+        if current_credits < credit_cost:
+            raise ValueError(f"INSUFFICIENT_CREDITS:{current_credits}:{credit_cost}")
 
-    user_ref.update({
-        'credits': new_credits,
-        'updated_at': firestore.SERVER_TIMESTAMP,
-    })
+        # Calculate new balance
+        new_credits = current_credits - credit_cost
 
-    # Log to credit_history
-    user_ref.collection('credit_history').add({
-        'amount': -credit_cost,
-        'reason': f'generation_{tool_id}',
-        'balance_after': new_credits,
-        'type': 'deduct',
-        'created_at': firestore.SERVER_TIMESTAMP,
-    })
+        # Update credits within transaction (atomic)
+        transaction.update(user_ref, {
+            'credits': new_credits,
+            'updated_at': firestore.SERVER_TIMESTAMP,
+        })
 
-    logger.info(f"💰 Deducted {credit_cost} credits from {user_id} for {tool_id}. {current_credits} -> {new_credits}")
-    return True
+        return current_credits, new_credits
+
+    try:
+        # Execute transaction
+        transaction = db.transaction()
+        current_credits, new_credits = deduct_in_transaction(transaction, user_ref, credit_cost, tool_id)
+
+        # Log to credit_history (outside transaction, not critical)
+        user_ref.collection('credit_history').add({
+            'amount': -credit_cost,
+            'reason': f'generation_{tool_id}',
+            'balance_after': new_credits,
+            'type': 'deduct',
+            'created_at': firestore.SERVER_TIMESTAMP,
+        })
+
+        logger.info(f"💰 [ATOMIC] Deducted {credit_cost} credits from {user_id} for {tool_id}. {current_credits} -> {new_credits}")
+        return True
+
+    except ValueError as e:
+        error_msg = str(e)
+        if error_msg == "USER_NOT_FOUND":
+            logger.warning(f"🚫 User not found: {user_id}")
+            raise HTTPException(status_code=404, detail="User not found")
+        elif error_msg.startswith("INSUFFICIENT_CREDITS"):
+            parts = error_msg.split(":")
+            current = parts[1] if len(parts) > 1 else "?"
+            needed = parts[2] if len(parts) > 2 else credit_cost
+            logger.warning(f"🚫 Insufficient credits for {user_id}: has {current}, needs {needed}")
+            raise HTTPException(
+                status_code=402,  # Payment Required
+                detail=f"Insufficient credits. Have: {current}, Need: {needed}"
+            )
+        else:
+            raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        logger.error(f"❌ Transaction error for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Credit deduction failed")
 
 # In-memory job storage (use Redis/DB in production)
 jobs_store: Dict[str, Dict[str, Any]] = {}
@@ -270,12 +300,24 @@ async def process_job(job_id: str, tool_id: str, input_params: Dict[str, Any]):
 
 
 @router.get("/job/{job_id}", response_model=JobStatusResponse)
-async def get_job_status(job_id: str):
-    """Get the status of a generation job."""
+async def get_job_status(
+    job_id: str,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """
+    Get the status of a generation job.
+    SECURED: Only the job owner can check status.
+    """
     if job_id not in jobs_store:
         raise HTTPException(status_code=404, detail="Job not found")
 
     job = jobs_store[job_id]
+
+    # Security: Verify job ownership
+    job_owner = job.get("user_id")
+    if job_owner and job_owner != user_id:
+        logger.warning(f"🚫 User {user_id} tried to access job {job_id} owned by {job_owner}")
+        raise HTTPException(status_code=403, detail="Access denied: not your job")
 
     result_url = None
     if job["result"] and isinstance(job["result"], dict):
