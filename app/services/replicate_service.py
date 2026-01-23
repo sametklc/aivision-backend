@@ -1308,28 +1308,63 @@ class ReplicateService:
         return time_estimates.get(tool_id, 15)
 
     def get_credit_cost(self, tool_id: str) -> int:
-        """Get credit cost for tools (for user-facing display)."""
+        """Get credit cost for tools - MUST match Flutter tools_data.dart values."""
         costs = {
-            # VIDEO AI
-            "ai_hug": 8, "image_to_video": 8, "text_to_video": 10,
-            "talking_head": 6, "video_expand": 8, "style_transfer_video": 8,
-            "video_bg_remove": 6,
-            "face_swap_video": 8, "script_to_video": 10,
-            # PHOTO ENHANCE
-            "face_clarify": 2, "old_photo_restore": 3, "colorize": 2,
-            "4k_upscale": 3, "relight": 3, "low_light_fix": 2,
-            "scratch_remover": 3, "denoise": 2, "anime_yourself": 2,
-            "portrait_mode": 2, "color_correct": 2,
-            # MAGIC EDIT
-            "magic_eraser": 3, "ai_headshot": 5, "clothes_swap": 5,
-            "bg_remix": 3, "sticker_maker": 2, "outpainting": 3,
-            "sky_replace": 3, "interior_design": 4, "product_shoot": 3,
-            "text_effects": 3, "tattoo_tryon": 3, "style_transfer": 4,
-            "nano_banana_pro": 6,  # $0.15 per run
-            # TEXT-TO-IMAGE / IMAGE-TO-IMAGE
-            "text_to_image": 15, "image_to_image": 15, "img2img": 15,
+            # ═══════════════════════════════════════════════════════════════════
+            # VIDEO AI (matches Flutter tools_data.dart)
+            # ═══════════════════════════════════════════════════════════════════
+            "image_to_video": 15,
+            "text_to_video": 12,
+            "talking_head": 105,
+            "video_expand": 100,
+            "video_bg_remove": 24,
+            "face_swap_video": 45,
+            "script_to_video": 150,
+            "style_transfer_video": 30,  # Not in Flutter, default
+            "ai_hug": 30,  # Showcase only, default
+            "kling_video": 30,  # Showcase only, default
+
+            # ═══════════════════════════════════════════════════════════════════
+            # PHOTO ENHANCE (all 30 credits in Flutter)
+            # ═══════════════════════════════════════════════════════════════════
+            "face_clarify": 30,
+            "old_photo_restore": 30,
+            "colorize": 30,
+            "4k_upscale": 30,
+            "relight": 30,
+            "low_light_fix": 30,
+            "scratch_remover": 30,
+            "denoise": 30,
+            "anime_yourself": 30,
+            "color_correct": 30,
+            "portrait_mode": 30,  # Not in Flutter list, default
+
+            # ═══════════════════════════════════════════════════════════════════
+            # MAGIC EDIT (matches Flutter tools_data.dart)
+            # ═══════════════════════════════════════════════════════════════════
+            "text_to_image": 30,
+            "img2img": 30,
+            "image_to_image": 30,  # Alias for img2img
+            "flux_pro": 50,
+            "style_transfer": 30,
+            "magic_eraser": 30,
+            "ai_headshot": 30,
+            "clothes_swap": 30,
+            "bg_remix": 30,
+            "sticker_maker": 30,
+            "outpainting": 30,
+            "sky_replace": 30,
+            "interior_design": 30,
+            "product_shoot": 30,
+            "text_effects": 30,
+            "tattoo_tryon": 30,
+
+            # ═══════════════════════════════════════════════════════════════════
+            # SHOWCASE TEMPLATES (nano_banana_pro, etc.)
+            # ═══════════════════════════════════════════════════════════════════
+            "nano_banana_pro": 30,  # Showcase template
         }
-        return costs.get(tool_id, 2)
+        return costs.get(tool_id, 30)  # Default 30 for unknown tools
 
     def get_model_info(self, tool_id: str) -> Optional[Dict[str, Any]]:
         """Get model info for a tool."""
