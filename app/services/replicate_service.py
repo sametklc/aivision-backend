@@ -56,7 +56,13 @@ class ReplicateService:
             safe_inputs = {k: v for k, v in inputs.items() if v is not None}
 
             logger.info(f"[REPLICATE] Running {model_path} ({category})")
-            logger.debug(f"Inputs: {safe_inputs}")
+            logger.info(f"[REPLICATE] Input keys: {list(safe_inputs.keys())}")
+            # Log input values (truncate long strings for readability)
+            for k, v in safe_inputs.items():
+                if isinstance(v, str) and len(v) > 100:
+                    logger.debug(f"[REPLICATE]   {k}: {v[:100]}...")
+                else:
+                    logger.debug(f"[REPLICATE]   {k}: {v}")
 
             # Build full model identifier with version if provided
             if version:
@@ -74,10 +80,17 @@ class ReplicateService:
             return True, self._process_output(output)
 
         except replicate.exceptions.ReplicateError as e:
-            logger.error(f"Replicate API error: {str(e)}")
-            return False, f"Replicate API error: {str(e)}"
+            error_str = str(e)
+            logger.error(f"[REPLICATE] API error for {model_path}: {error_str}")
+            logger.error(f"[REPLICATE] Sent inputs: {list(safe_inputs.keys())}")
+            # Check for common issues
+            if "422" in error_str or "field required" in error_str.lower():
+                logger.error(f"[REPLICATE] Missing required field! Model expects specific inputs.")
+            return False, f"Replicate API error: {error_str}"
         except Exception as e:
-            logger.error(f"Request error: {str(e)}")
+            logger.error(f"[REPLICATE] Unexpected error for {model_path}: {str(e)}")
+            import traceback
+            logger.error(f"[REPLICATE] Traceback: {traceback.format_exc()}")
             return False, str(e)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -401,6 +414,9 @@ class ReplicateService:
         match tool_id:
             case "ai_hug" | "image_to_video":
                 # wan-video/wan-2.2-i2v-fast
+                # VALIDATION: image is required for this model
+                if not image_url:
+                    raise ValueError(f"{tool_id} requires an image_url but none was provided")
                 inputs["image"] = image_url
                 inputs["prompt"] = prompt or config.get("default_prompt", "smooth cinematic motion")
                 inputs["num_frames"] = 81  # Minimum required
@@ -418,7 +434,10 @@ class ReplicateService:
 
             case "text_to_video":
                 # bytedance/seedance-1-lite
+                # VALIDATION: prompt is required for this model
                 base_prompt = prompt or config.get("default_prompt", "cinematic video")
+                if not base_prompt or not base_prompt.strip():
+                    raise ValueError("text_to_video requires a prompt but none was provided")
                 inputs["prompt"] = apply_style_to_prompt(base_prompt, style)
                 # Duration: 2-12 seconds
                 duration = kwargs.get("duration", config.get("default_duration", 5))
@@ -1039,29 +1058,38 @@ class ReplicateService:
         extra_params = {k: v for k, v in input_params.items()
                        if k not in ["image_url", "prompt", "mask_url", "tool_id"]}
 
-        # Route to appropriate handler
-        if category == "video":
-            success, result = await self.generate_video(
-                tool_id=tool_id,
-                image_url=image_url,
-                prompt=prompt,
-                **extra_params
-            )
-        elif category == "magic_edit":
-            success, result = await self.edit_image(
-                tool_id=tool_id,
-                image_url=image_url,
-                prompt=prompt,
-                mask_url=mask_url,
-                **extra_params
-            )
-        else:  # photo_enhance
-            success, result = await self.enhance_photo(
-                tool_id=tool_id,
-                image_url=image_url,
-                prompt=prompt,
-                **extra_params
-            )
+        try:
+            # Route to appropriate handler
+            if category == "video":
+                success, result = await self.generate_video(
+                    tool_id=tool_id,
+                    image_url=image_url,
+                    prompt=prompt,
+                    **extra_params
+                )
+            elif category == "magic_edit":
+                success, result = await self.edit_image(
+                    tool_id=tool_id,
+                    image_url=image_url,
+                    prompt=prompt,
+                    mask_url=mask_url,
+                    **extra_params
+                )
+            else:  # photo_enhance
+                success, result = await self.enhance_photo(
+                    tool_id=tool_id,
+                    image_url=image_url,
+                    prompt=prompt,
+                    **extra_params
+                )
+        except ValueError as e:
+            # Handle validation errors (missing required parameters)
+            logger.error(f"[PREDICTION] Validation error for {tool_id}: {str(e)}")
+            return False, str(e), None
+        except Exception as e:
+            # Handle unexpected errors
+            logger.error(f"[PREDICTION] Unexpected error for {tool_id}: {str(e)}")
+            return False, str(e), None
 
         # Add client-side processing flag if needed
         client_processing = model_config.get("client_side_processing")
