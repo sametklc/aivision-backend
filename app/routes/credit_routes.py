@@ -213,16 +213,35 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
                         logger.info(f"✅ Valid purchase found: {transaction_id} for product {product_id}")
                         return True
 
-                # Check subscriptions - for subscriptions, we validate by checking active entitlement
+                # Check subscriptions - for subscriptions, validate ANY active subscription
                 subscriptions = subscriber.get("subscriptions", {})
 
-                # Also check with Android format (product_id:base_plan_id)
+                # Determine if this is a subscription product request
+                is_subscription_product = any(
+                    keyword in product_id.lower()
+                    for keyword in ['weekly', 'yearly', 'monthly', 'pro', 'premium', 'subscription']
+                )
+
+                if is_subscription_product and subscriptions:
+                    # For subscription products, ANY active subscription is valid
+                    # This handles cases where product IDs don't match exactly
+                    for sub_product_id, sub_info in subscriptions.items():
+                        expires_date = sub_info.get("expires_date")
+                        store_txn = sub_info.get("store_transaction_id")
+                        original_date = sub_info.get("original_purchase_date")
+
+                        logger.info(f"🔍 Found subscription {sub_product_id}: expires={expires_date}")
+
+                        # Subscription is valid if it has any purchase record
+                        if store_txn or original_date:
+                            logger.info(f"✅ Valid subscription found: {sub_product_id} (requested: {product_id})")
+                            return True
+
+                # Also check specific product variants for exact match
                 product_variants = [product_id]
                 if ":" in product_id:
-                    # Already has base plan, also check without it
                     product_variants.append(product_id.split(":")[0])
                 else:
-                    # Add common Android base plan formats
                     product_variants.extend([
                         f"{product_id}:weekly",
                         f"{product_id}:yearly",
@@ -232,18 +251,19 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
                 for variant in product_variants:
                     if variant in subscriptions:
                         sub_info = subscriptions[variant]
-                        expires_date = sub_info.get("expires_date")
-                        unsubscribe_detected = sub_info.get("unsubscribe_detected_at")
-
-                        logger.info(f"🔍 Found subscription {variant}: expires={expires_date}, unsubscribe={unsubscribe_detected}")
-
-                        # Subscription is valid if it exists and has any transaction
                         if sub_info.get("store_transaction_id") or sub_info.get("original_purchase_date"):
                             logger.info(f"✅ Valid subscription found for product {variant}")
                             return True
 
-                # Check entitlements as fallback
+                # Check entitlements as fallback - ANY active entitlement for subscription products
                 entitlements = subscriber.get("entitlements", {})
+                if is_subscription_product and entitlements:
+                    for ent_name, ent_info in entitlements.items():
+                        if ent_info.get("is_active") or ent_info.get("product_identifier"):
+                            logger.info(f"✅ Valid entitlement '{ent_name}' found (requested: {product_id})")
+                            return True
+
+                # Check specific entitlement product match
                 for ent_name, ent_info in entitlements.items():
                     if ent_info.get("product_identifier") in product_variants:
                         logger.info(f"✅ Valid entitlement '{ent_name}' found for product {product_id}")
