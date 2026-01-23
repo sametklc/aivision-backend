@@ -304,9 +304,9 @@ PRODUCT_CREDITS = {
     "com.aivision.credits.1000": 1000,
     "com.aivision.credits.2000": 2000,
     # Subscriptions
-    "com.aivision.weekly": 500,
-    "com.aivision.weekly.pro": 1000,
-    "com.aivision.yearly": 5000,
+    "com.aivision.weekly": 500,        # 1 week premium + 500 credits
+    "com.aivision.weekly.pro": 1000,   # 1 week pro + 1000 credits
+    "com.aivision.yearly": 4000,       # 1 year subscription + 4000 credits
 }
 
 
