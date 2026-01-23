@@ -223,8 +223,24 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
                 )
 
                 if is_subscription_product and subscriptions:
-                    # For subscription products, ANY active subscription is valid
-                    # This handles cases where product IDs don't match exactly
+                    # SECURITY: Validate subscription matches the requested product tier
+                    # Map subscription types for validation
+                    subscription_tiers = {
+                        'weekly': ['weekly'],
+                        'pro': ['weekly.pro', 'weekly_pro', 'pro'],
+                        'yearly': ['yearly'],
+                    }
+
+                    # Determine requested tier from product_id
+                    requested_tier = None
+                    product_lower = product_id.lower()
+                    if 'yearly' in product_lower:
+                        requested_tier = 'yearly'
+                    elif 'pro' in product_lower:
+                        requested_tier = 'pro'
+                    elif 'weekly' in product_lower:
+                        requested_tier = 'weekly'
+
                     for sub_product_id, sub_info in subscriptions.items():
                         expires_date = sub_info.get("expires_date")
                         store_txn = sub_info.get("store_transaction_id")
@@ -232,9 +248,25 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
 
                         logger.info(f"🔍 Found subscription {sub_product_id}: expires={expires_date}")
 
-                        # Subscription is valid if it has any purchase record
-                        if store_txn or original_date:
-                            logger.info(f"✅ Valid subscription found: {sub_product_id} (requested: {product_id})")
+                        # SECURITY: Check if subscription tier matches or is higher
+                        sub_lower = sub_product_id.lower()
+                        is_valid_tier = False
+
+                        if requested_tier == 'yearly':
+                            # Yearly can only be satisfied by yearly
+                            is_valid_tier = 'yearly' in sub_lower
+                        elif requested_tier == 'pro':
+                            # Pro can be satisfied by pro or yearly
+                            is_valid_tier = 'pro' in sub_lower or 'yearly' in sub_lower
+                        elif requested_tier == 'weekly':
+                            # Weekly can be satisfied by any subscription
+                            is_valid_tier = True
+                        else:
+                            # Unknown tier - accept any subscription as fallback
+                            is_valid_tier = True
+
+                        if is_valid_tier and (store_txn or original_date):
+                            logger.info(f"✅ Valid subscription found: {sub_product_id} (requested: {product_id}, tier: {requested_tier})")
                             return True
 
                 # Also check specific product variants for exact match
@@ -411,32 +443,39 @@ async def deduct_credits(
 ):
     """
     Kredi düş (generation başlamadan önce çağrılır)
+    SECURITY: Uses Firestore transaction to prevent race conditions
     """
     try:
         db = get_firestore_client()
         user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
 
-        if not user_doc.exists:
-            raise HTTPException(status_code=404, detail="User not found")
+        # SECURITY: Use transaction for atomic read-modify-write
+        @firestore.transactional
+        def deduct_in_transaction(transaction, user_ref, amount, reason):
+            user_doc = user_ref.get(transaction=transaction)
 
-        current_credits = user_doc.to_dict().get('credits', 0)
+            if not user_doc.exists:
+                raise ValueError("User not found")
 
-        if current_credits < request.amount:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient credits. Have: {current_credits}, Need: {request.amount}"
-            )
+            current_credits = user_doc.to_dict().get('credits', 0)
 
-        new_credits = current_credits - request.amount
+            if current_credits < amount:
+                raise ValueError(f"Insufficient credits. Have: {current_credits}, Need: {amount}")
 
-        # Update credits
-        user_ref.update({
-            'credits': new_credits,
-            'updated_at': firestore.SERVER_TIMESTAMP,
-        })
+            new_credits = current_credits - amount
 
-        # Log to credit_history
+            # Update credits atomically
+            transaction.update(user_ref, {
+                'credits': new_credits,
+                'updated_at': firestore.SERVER_TIMESTAMP,
+            })
+
+            return current_credits, new_credits
+
+        transaction = db.transaction()
+        current_credits, new_credits = deduct_in_transaction(transaction, user_ref, request.amount, request.reason)
+
+        # Log to credit_history (outside transaction is OK)
         user_ref.collection('credit_history').add({
             'amount': -request.amount,
             'reason': request.reason,
@@ -445,7 +484,7 @@ async def deduct_credits(
             'created_at': firestore.SERVER_TIMESTAMP,
         })
 
-        logger.info(f"💰 Deducted {request.amount} credits from {user_id}. {current_credits} -> {new_credits}")
+        logger.info(f"💰 [ATOMIC] Deducted {request.amount} credits from {user_id}. {current_credits} -> {new_credits}")
 
         return DeductCreditsResponse(
             success=True,
@@ -454,8 +493,10 @@ async def deduct_credits(
             amount_deducted=request.amount
         )
 
-    except HTTPException:
-        raise
+    except ValueError as e:
+        if "Insufficient" in str(e):
+            raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"❌ Error deducting credits: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -469,62 +510,74 @@ async def add_credits(
     """
     Kredi ekle - SADECE DOĞRULANMIŞ SATIN ALMALAR İÇİN
     RevenueCat ile satın alma doğrulaması yapılır
+    SECURITY: Uses Firestore transaction for atomic deduplication + credit add
     """
     try:
-        # 1. Check if transaction already processed (prevent double-crediting)
-        if await check_transaction_already_processed(user_id, request.transaction_id):
-            logger.warning(f"⚠️ Transaction already processed: {request.transaction_id}")
-            raise HTTPException(status_code=400, detail="Transaction already processed")
-
-        # 2. Validate with RevenueCat
+        # 1. Validate with RevenueCat FIRST (before any DB operations)
         await validate_revenuecat_purchase(user_id, request.transaction_id, request.product_id)
 
-        # 3. Get credit amount for this product
+        # 2. Get credit amount for this product
         credit_amount = PRODUCT_CREDITS.get(request.product_id)
         if credit_amount is None:
             logger.error(f"❌ Unknown product ID: {request.product_id}")
             raise HTTPException(status_code=400, detail="Unknown product ID")
 
-        # Override with request amount if it matches (for flexibility)
-        if request.amount != credit_amount:
-            logger.warning(f"⚠️ Request amount {request.amount} doesn't match product credits {credit_amount}")
-            # Use the predefined amount for security
-            credit_amount = PRODUCT_CREDITS[request.product_id]
-
-        # 4. Add credits to user
+        # 3. SECURITY: Atomic deduplication check + credit add using transaction
         db = get_firestore_client()
         user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
 
-        if not user_doc.exists:
-            current_credits = 0
-            new_credits = credit_amount
-            user_ref.set({
-                'id': user_id,
-                'credits': new_credits,
+        @firestore.transactional
+        def add_credits_atomic(transaction, user_ref, credit_amount, transaction_id, product_id, reason):
+            # Check if transaction already processed WITHIN transaction (atomic)
+            history_ref = user_ref.collection('credit_history')
+            # Note: Firestore transactions don't support queries, so we use a document ID based on transaction_id
+            txn_doc_id = f"txn_{transaction_id.replace('/', '_').replace('.', '_')[:100]}"
+            txn_doc_ref = history_ref.document(txn_doc_id)
+            txn_doc = txn_doc_ref.get(transaction=transaction)
+
+            if txn_doc.exists:
+                raise ValueError("DUPLICATE_TRANSACTION")
+
+            # Get current credits
+            user_doc = user_ref.get(transaction=transaction)
+
+            if not user_doc.exists:
+                current_credits = 0
+                new_credits = credit_amount
+                transaction.set(user_ref, {
+                    'id': user_ref.id,
+                    'credits': new_credits,
+                    'created_at': firestore.SERVER_TIMESTAMP,
+                    'updated_at': firestore.SERVER_TIMESTAMP,
+                })
+            else:
+                current_credits = user_doc.to_dict().get('credits', 0)
+                new_credits = current_credits + credit_amount
+                transaction.update(user_ref, {
+                    'credits': new_credits,
+                    'updated_at': firestore.SERVER_TIMESTAMP,
+                })
+
+            # Log to credit_history with deterministic ID (prevents duplicates)
+            transaction.set(txn_doc_ref, {
+                'amount': credit_amount,
+                'reason': reason,
+                'product_id': product_id,
+                'transaction_id': transaction_id,
+                'balance_after': new_credits,
+                'type': 'purchase',
                 'created_at': firestore.SERVER_TIMESTAMP,
-                'updated_at': firestore.SERVER_TIMESTAMP,
-            })
-        else:
-            current_credits = user_doc.to_dict().get('credits', 0)
-            new_credits = current_credits + credit_amount
-            user_ref.update({
-                'credits': new_credits,
-                'updated_at': firestore.SERVER_TIMESTAMP,
             })
 
-        # 5. Log to credit_history with transaction_id (for duplicate check)
-        user_ref.collection('credit_history').add({
-            'amount': credit_amount,
-            'reason': request.reason,
-            'product_id': request.product_id,
-            'transaction_id': request.transaction_id,
-            'balance_after': new_credits,
-            'type': 'purchase',
-            'created_at': firestore.SERVER_TIMESTAMP,
-        })
+            return current_credits, new_credits
 
-        logger.info(f"💰 Added {credit_amount} credits to {user_id} (product: {request.product_id}). {current_credits} -> {new_credits}")
+        transaction = db.transaction()
+        current_credits, new_credits = add_credits_atomic(
+            transaction, user_ref, credit_amount,
+            request.transaction_id, request.product_id, request.reason
+        )
+
+        logger.info(f"💰 [ATOMIC] Added {credit_amount} credits to {user_id} (product: {request.product_id}). {current_credits} -> {new_credits}")
 
         return AddCreditsResponse(
             success=True,
@@ -533,6 +586,11 @@ async def add_credits(
             amount_added=credit_amount
         )
 
+    except ValueError as e:
+        if "DUPLICATE" in str(e):
+            logger.warning(f"⚠️ Transaction already processed: {request.transaction_id}")
+            raise HTTPException(status_code=400, detail="Transaction already processed")
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -593,22 +651,28 @@ async def internal_refund_credits(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ==================== REVENUECAT WEBHOOK (Optional but recommended) ====================
+# ==================== REVENUECAT WEBHOOK (REQUIRED AUTH) ====================
 
 @router.post("/webhook/revenuecat")
 async def revenuecat_webhook(
     event: dict,
-    authorization: str = Header(None)
+    authorization: str = Header(..., description="Bearer token for webhook authentication")
 ):
     """
     RevenueCat Webhook - Otomatik kredi ekleme
     RevenueCat dashboard'da bu URL'yi webhook olarak ayarla
     Bu en güvenli yöntem - client hiç karışmıyor
+
+    SECURITY: Authorization header ZORUNLU
     """
-    # Verify webhook authorization (optional but recommended)
-    webhook_auth = os.environ.get("REVENUECAT_WEBHOOK_AUTH", "")
-    if webhook_auth and authorization != f"Bearer {webhook_auth}":
-        logger.warning("⚠️ Invalid webhook authorization")
+    # SECURITY FIX: Webhook auth artık ZORUNLU
+    webhook_auth = os.environ.get("REVENUECAT_WEBHOOK_AUTH")
+    if not webhook_auth:
+        logger.error("🔴 SECURITY: REVENUECAT_WEBHOOK_AUTH not configured!")
+        raise HTTPException(status_code=500, detail="Webhook authentication not configured")
+
+    if authorization != f"Bearer {webhook_auth}":
+        logger.warning(f"⚠️ Invalid webhook authorization attempt")
         raise HTTPException(status_code=401, detail="Invalid webhook authorization")
 
     try:

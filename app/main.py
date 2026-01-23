@@ -7,10 +7,51 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from loguru import logger
+from collections import defaultdict
+from time import time
 import sys
 
 from .config import get_settings
 from .routes import ai_routes, tools_routes, upload_routes, credit_routes
+
+
+# ============================================================================
+# RATE LIMITING - In-memory rate limiter (use Redis in production for scaling)
+# ============================================================================
+class RateLimiter:
+    """Simple in-memory rate limiter per IP/user"""
+    def __init__(self, requests_per_minute: int = 60):
+        self.requests_per_minute = requests_per_minute
+        self.requests = defaultdict(list)
+
+    def is_allowed(self, key: str) -> bool:
+        """Check if request is allowed for given key (IP or user_id)"""
+        now = time()
+        minute_ago = now - 60
+
+        # Clean old requests
+        self.requests[key] = [t for t in self.requests[key] if t > minute_ago]
+
+        # Check limit
+        if len(self.requests[key]) >= self.requests_per_minute:
+            return False
+
+        # Record request
+        self.requests[key].append(now)
+        return True
+
+    def get_remaining(self, key: str) -> int:
+        """Get remaining requests for this minute"""
+        now = time()
+        minute_ago = now - 60
+        self.requests[key] = [t for t in self.requests[key] if t > minute_ago]
+        return max(0, self.requests_per_minute - len(self.requests[key]))
+
+
+# Global rate limiters
+general_limiter = RateLimiter(requests_per_minute=100)  # General API
+ai_limiter = RateLimiter(requests_per_minute=20)  # AI generation (more expensive)
+credit_limiter = RateLimiter(requests_per_minute=30)  # Credit operations
 
 # Configure logging
 logger.remove()
@@ -64,27 +105,79 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS middleware
+# CORS middleware - SECURITY: Restricted origins
+# For mobile apps CORS doesn't apply, but this restricts unauthorized web access
+_allowed_origins = settings.ALLOWED_ORIGINS.split(",") if settings.ALLOWED_ORIGINS else []
+# If no origins configured, only allow mobile apps (no web browser access)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=_allowed_origins if _allowed_origins else [],  # Empty = no web access allowed
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],  # Explicit methods only
+    allow_headers=["Authorization", "Content-Type", "X-Device-ID", "X-Request-ID"],  # Explicit headers
 )
 
 
-# Global exception handler
+# Rate limiting middleware - SECURITY: Prevent API abuse
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Apply rate limiting based on endpoint type"""
+    # Get client identifier (prefer user from auth, fallback to IP)
+    client_ip = request.client.host if request.client else "unknown"
+    # Try to get user from auth header for more accurate limiting
+    auth_header = request.headers.get("Authorization", "")
+    client_key = auth_header[:50] if auth_header else client_ip
+
+    path = request.url.path
+
+    # Apply appropriate rate limiter based on endpoint
+    if "/api/v1/ai/" in path:
+        limiter = ai_limiter
+        limit_name = "AI"
+    elif "/api/v1/credits/" in path:
+        limiter = credit_limiter
+        limit_name = "Credit"
+    else:
+        limiter = general_limiter
+        limit_name = "General"
+
+    if not limiter.is_allowed(client_key):
+        logger.warning(f"Rate limit exceeded for {client_key} on {path}")
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": "Too many requests",
+                "error_code": "RATE_LIMIT_EXCEEDED",
+                "message": f"Rate limit exceeded. Please wait before making more requests.",
+                "retry_after": 60,
+            },
+            headers={"Retry-After": "60"}
+        )
+
+    response = await call_next(request)
+
+    # Add rate limit headers
+    remaining = limiter.get_remaining(client_key)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Limit"] = str(limiter.requests_per_minute)
+
+    return response
+
+
+# Global exception handler - SECURITY: Never expose details in production
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {str(exc)}")
+    # Log full error for debugging (server-side only)
+    logger.error(f"Unhandled exception on {request.url.path}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={
             "success": False,
             "error": "Internal server error",
             "error_code": "INTERNAL_ERROR",
-            "details": str(exc) if settings.DEBUG else None,
+            # SECURITY: Never expose exception details to client
+            # Details are logged server-side for debugging
         }
     )
 

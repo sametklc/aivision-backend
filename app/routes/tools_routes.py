@@ -2,12 +2,23 @@
 AIVision API - Tools Routes
 Endpoints for listing and getting tool information
 """
-from fastapi import APIRouter, HTTPException
+import os
+from fastapi import APIRouter, HTTPException, Header
 from typing import List
 
 from ..models.schemas import ToolInfo, ToolsListResponse, ToolCategory
 from ..config import AI_MODELS, TOOL_CATEGORIES
 from ..services.replicate_service import replicate_service
+
+
+def verify_admin_api_key(x_admin_key: str = Header(..., description="Admin API key")):
+    """Verify admin API key for protected endpoints"""
+    admin_key = os.environ.get("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=500, detail="Admin API key not configured")
+    if x_admin_key != admin_key:
+        raise HTTPException(status_code=401, detail="Invalid admin API key")
+    return True
 
 router = APIRouter(prefix="/api/v1/tools", tags=["Tools"])
 
@@ -418,12 +429,22 @@ async def list_tools():
 
 
 @router.get("/admin/models")
-async def get_admin_models():
+async def get_admin_models(
+    x_admin_key: str = Header(..., description="Admin API key for authentication")
+):
     """
     Get all AI models with full configuration for admin panel.
     Returns the raw AI_MODELS config with supports, description, etc.
     MUST be defined BEFORE /{tool_id} to avoid route conflict!
+    SECURITY: Requires Admin API key in X-Admin-Key header
     """
+    # SECURITY: Verify admin API key
+    admin_key = os.environ.get("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=500, detail="Admin API key not configured on server")
+    if x_admin_key != admin_key:
+        raise HTTPException(status_code=401, detail="Invalid admin API key")
+
     models = []
 
     for tool_id, config in AI_MODELS.items():

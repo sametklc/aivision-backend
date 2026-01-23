@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_PERIOD: int = 60  # seconds
 
+    # CORS - Allowed origins (comma-separated in env, or empty for mobile-only)
+    # For mobile apps, CORS doesn't apply, but this restricts web access
+    ALLOWED_ORIGINS: str = ""  # e.g., "https://yourdomain.com,https://admin.yourdomain.com"
+
     # AI Model Defaults
     DEFAULT_VIDEO_DURATION: int = 4  # seconds
     DEFAULT_IMAGE_QUALITY: str = "high"
