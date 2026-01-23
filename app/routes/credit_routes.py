@@ -314,18 +314,28 @@ async def validate_revenuecat_purchase(user_id: str, transaction_id: str, produc
         raise HTTPException(status_code=500, detail="Failed to connect to RevenueCat")
 
 
+def get_transaction_doc_id(transaction_id: str) -> str:
+    """
+    Generate deterministic document ID from transaction_id.
+    MUST be the same for both /add endpoint and webhook to prevent duplicates.
+    """
+    # Sanitize transaction_id for Firestore document ID
+    return f"txn_{transaction_id.replace('/', '_').replace('.', '_')[:100]}"
+
+
 async def check_transaction_already_processed(user_id: str, transaction_id: str) -> bool:
     """
     Check if this transaction was already processed (prevent double-crediting)
+    Uses document ID check (same as /add endpoint) for consistency.
     """
     db = get_firestore_client()
 
-    # Check credit_history for this transaction
+    # Use the SAME document ID as /add endpoint for consistent deduplication
+    txn_doc_id = get_transaction_doc_id(transaction_id)
     history_ref = db.collection('users').document(user_id).collection('credit_history')
-    query = history_ref.where('transaction_id', '==', transaction_id).limit(1)
-    docs = query.get()
+    txn_doc = history_ref.document(txn_doc_id).get()
 
-    return len(list(docs)) > 0
+    return txn_doc.exists
 
 
 # ==================== CREDIT AMOUNTS FOR PRODUCTS ====================
@@ -530,8 +540,8 @@ async def add_credits(
         def add_credits_atomic(transaction, user_ref, credit_amount, transaction_id, product_id, reason):
             # Check if transaction already processed WITHIN transaction (atomic)
             history_ref = user_ref.collection('credit_history')
-            # Note: Firestore transactions don't support queries, so we use a document ID based on transaction_id
-            txn_doc_id = f"txn_{transaction_id.replace('/', '_').replace('.', '_')[:100]}"
+            # Use shared helper for consistent document ID (prevents webhook duplicates)
+            txn_doc_id = get_transaction_doc_id(transaction_id)
             txn_doc_ref = history_ref.document(txn_doc_id)
             txn_doc = txn_doc_ref.get(transaction=transaction)
 
@@ -718,8 +728,10 @@ async def revenuecat_webhook(
                 })
                 current_credits = 15
 
-            # Log transaction
-            user_ref.collection('credit_history').add({
+            # Log transaction with deterministic document ID (same as /add endpoint)
+            # This ensures webhook and /add use the same deduplication key
+            txn_doc_id = get_transaction_doc_id(transaction_id)
+            user_ref.collection('credit_history').document(txn_doc_id).set({
                 'amount': credit_amount,
                 'reason': 'webhook_purchase',
                 'product_id': product_id,
