@@ -774,3 +774,105 @@ async def revenuecat_webhook(
         logger.error(f"❌ Webhook error: {e}")
         # Return 200 to prevent RevenueCat from retrying
         return {"success": False, "error": str(e)}
+
+
+# ==================== ADMIN ENDPOINTS ====================
+
+class DeleteUserRequest(BaseModel):
+    """Request model for deleting a user"""
+    user_id: str = Field(..., description="Firebase Auth UID of user to delete")
+
+
+@router.post("/admin/delete-user")
+async def admin_delete_user(
+    request: DeleteUserRequest,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """
+    Hard delete a user - removes from Firebase Auth + Firestore
+    Only accessible by admin users
+    """
+    try:
+        db = get_firestore_client()
+
+        # Check if requester is admin
+        admin_doc = db.collection('admins').document(user_id).get()
+        if not admin_doc.exists:
+            logger.warning(f"⚠️ Non-admin user {user_id} tried to delete user {request.user_id}")
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        target_user_id = request.user_id
+        logger.info(f"🗑️ Admin {user_id} deleting user {target_user_id}")
+
+        # 1. Delete from Firebase Auth
+        try:
+            auth.delete_user(target_user_id)
+            logger.info(f"✅ Deleted user from Firebase Auth: {target_user_id}")
+        except auth.UserNotFoundError:
+            logger.warning(f"⚠️ User not found in Firebase Auth: {target_user_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to delete from Firebase Auth: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to delete from Auth: {str(e)}")
+
+        # 2. Delete Firestore data (subcollections first)
+        user_ref = db.collection('users').document(target_user_id)
+
+        # Delete credit_history subcollection
+        credit_history = user_ref.collection('credit_history').stream()
+        for doc in credit_history:
+            doc.reference.delete()
+        logger.info(f"🗑️ Deleted credit_history for {target_user_id}")
+
+        # Delete liked_creations subcollection
+        liked = user_ref.collection('liked_creations').stream()
+        for doc in liked:
+            doc.reference.delete()
+        logger.info(f"🗑️ Deleted liked_creations for {target_user_id}")
+
+        # Delete blocked_users subcollection
+        blocked = user_ref.collection('blocked_users').stream()
+        for doc in blocked:
+            doc.reference.delete()
+        logger.info(f"🗑️ Deleted blocked_users for {target_user_id}")
+
+        # Delete user document
+        user_ref.delete()
+        logger.info(f"🗑️ Deleted user document: {target_user_id}")
+
+        # 3. Update community_creations to show "Deleted User"
+        posts = db.collection('community_creations').where('user_id', '==', target_user_id).stream()
+        post_count = 0
+        for post in posts:
+            post.reference.update({
+                'user_name': 'Deleted User',
+                'user_photo_url': None
+            })
+            post_count += 1
+        logger.info(f"✏️ Updated {post_count} posts to 'Deleted User'")
+
+        # 4. Update comments to show "Deleted User"
+        comments = db.collection('comments').where('user_id', '==', target_user_id).stream()
+        comment_count = 0
+        for comment in comments:
+            comment.reference.update({
+                'user_name': 'Deleted User',
+                'user_photo_url': None
+            })
+            comment_count += 1
+        logger.info(f"✏️ Updated {comment_count} comments to 'Deleted User'")
+
+        logger.info(f"✅ User {target_user_id} completely deleted by admin {user_id}")
+
+        return {
+            "success": True,
+            "message": "User deleted successfully",
+            "deleted_user_id": target_user_id,
+            "posts_updated": post_count,
+            "comments_updated": comment_count
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Admin delete user error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
