@@ -205,7 +205,16 @@ async def generate(
         )
 
     # Get credit cost for this tool
-    credit_cost = replicate_service.get_credit_cost(tool_id)
+    # Special handling for text_to_video: dynamic pricing based on duration & resolution
+    if tool_id == "text_to_video":
+        duration = request.duration or 5
+        resolution = request.resolution or "720p"
+        # Pricing per second: 480p=6, 720p=9, 1080p=15 credits
+        credits_per_second = {"480p": 6, "720p": 9, "1080p": 15}.get(resolution, 9)
+        credit_cost = duration * credits_per_second
+        logger.info(f"💰 [TEXT_TO_VIDEO] Dynamic pricing: {duration}s @ {resolution} = {credit_cost} credits")
+    else:
+        credit_cost = replicate_service.get_credit_cost(tool_id)
 
     # CHECK AND DEDUCT CREDITS BEFORE PROCESSING
     # This prevents unauthorized generation
