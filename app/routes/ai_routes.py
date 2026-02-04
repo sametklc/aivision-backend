@@ -1113,3 +1113,119 @@ async def edit_expression(
         estimated_time=20,
         credits_used=credit_cost,
     )
+
+
+# ==================== REVIEWER MODE ====================
+# Secure endpoint for Google Play reviewers only (Android)
+
+from pydantic import BaseModel
+
+class ReviewerModeRequest(BaseModel):
+    secret_code: str
+
+class ReviewerModeResponse(BaseModel):
+    success: bool
+    message: str
+    credits_added: int = 0
+
+@router.post("/activate-reviewer-mode", response_model=ReviewerModeResponse)
+async def activate_reviewer_mode(
+    request: ReviewerModeRequest,
+    user_id: str = Depends(verify_firebase_token)
+):
+    """
+    Activate reviewer mode for Google Play reviewers.
+    SECURITY:
+    - Secret code verified against Firestore (not hardcoded)
+    - Each user can only activate ONCE (prevents abuse)
+    - Remote flag must be enabled in Firestore
+    - Adds real credits to Firestore (not just local)
+    """
+    db = get_firestore_client()
+
+    # 1. Check remote flag and get secret code from Firestore
+    try:
+        settings_doc = db.collection('app_settings').document('reviewer_mode').get()
+
+        if not settings_doc.exists:
+            logger.warning(f"🚫 Reviewer mode settings not found")
+            raise HTTPException(status_code=403, detail="Reviewer mode not available")
+
+        settings = settings_doc.to_dict()
+        is_enabled = settings.get('enabled', False)
+        remote_secret = settings.get('secret_code', '')
+        credits_to_add = settings.get('credits_amount', 1000)  # Default 1000
+
+        if not is_enabled:
+            logger.warning(f"🚫 Reviewer mode disabled remotely")
+            raise HTTPException(status_code=403, detail="Reviewer mode not available")
+
+        if not remote_secret:
+            logger.warning(f"🚫 No secret code configured")
+            raise HTTPException(status_code=403, detail="Reviewer mode not configured")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error fetching reviewer settings: {e}")
+        raise HTTPException(status_code=500, detail="Configuration error")
+
+    # 2. Verify secret code
+    if request.secret_code.strip() != remote_secret:
+        logger.warning(f"🚫 Invalid reviewer code attempt by user {user_id}")
+        raise HTTPException(status_code=403, detail="Invalid code")
+
+    # 3. Check if user already activated (prevent reuse)
+    user_ref = db.collection('users').document(user_id)
+    user_doc = user_ref.get()
+
+    if not user_doc.exists:
+        logger.warning(f"🚫 User not found: {user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_data = user_doc.to_dict()
+    if user_data.get('reviewer_mode_activated', False):
+        logger.warning(f"🚫 User {user_id} already activated reviewer mode")
+        raise HTTPException(status_code=400, detail="Already activated")
+
+    # 4. Add credits and mark as reviewer (atomic transaction)
+    try:
+        @firestore.transactional
+        def activate_reviewer(transaction, user_ref, credits_to_add):
+            user_doc = user_ref.get(transaction=transaction)
+            current_credits = user_doc.to_dict().get('credits', 0)
+            new_credits = current_credits + credits_to_add
+
+            transaction.update(user_ref, {
+                'credits': new_credits,
+                'reviewer_mode_activated': True,
+                'is_reviewer_premium': True,  # Grants premium access (isSubscribed = true)
+                'reviewer_activated_at': firestore.SERVER_TIMESTAMP,
+                'updated_at': firestore.SERVER_TIMESTAMP,
+            })
+
+            return new_credits
+
+        transaction = db.transaction()
+        new_credits = activate_reviewer(transaction, user_ref, credits_to_add)
+
+        # Log to credit history
+        user_ref.collection('credit_history').add({
+            'amount': credits_to_add,
+            'reason': 'reviewer_mode_activation',
+            'balance_after': new_credits,
+            'type': 'add',
+            'created_at': firestore.SERVER_TIMESTAMP,
+        })
+
+        logger.info(f"✅ Reviewer mode activated for user {user_id}, added {credits_to_add} credits")
+
+        return ReviewerModeResponse(
+            success=True,
+            message="Reviewer mode activated successfully",
+            credits_added=credits_to_add,
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Error activating reviewer mode: {e}")
+        raise HTTPException(status_code=500, detail="Activation failed")
